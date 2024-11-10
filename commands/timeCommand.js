@@ -11,97 +11,78 @@ const timezoneMappings = JSON.parse(
     readFileSync(join(__dirname, '../data/timezones.json'), 'utf8')
 );
 
-function formatTimeMessage(timezone) {
-    const time = moment().tz(timezone);
-    const locationName = timezone.split('/').pop().replace(/_/g, ' ');
-    
-    return `*${locationName}: ${time.format('HH:mm:ss')}*\n*${time.format('MMMM DD YYYY')}*`;
-}
-
-function findTimezone(location) {
-    const locationLower = location.toLowerCase();
-
-    // Direct match in our mapping
-    if (timezoneMappings[locationLower]) {
-        return timezoneMappings[locationLower];
-    }
-
-    // Partial match in our mapping
-    const partialMatch = Object.entries(timezoneMappings).find(([key]) => 
-        key.includes(locationLower) || locationLower.includes(key)
-    );
-    if (partialMatch) {
-        return partialMatch[1];
-    }
-
-    // Last resort: search moment-timezone database
-    return moment.tz.names().find(zone => {
-        const zoneParts = zone.toLowerCase().split('/');
-        const locationParts = locationLower.split(' ');
-        
-        return locationParts.some(part => 
-            zoneParts.some(zonePart => 
-                zonePart.includes(part.replace(/[^a-z]/g, ''))
-            )
-        );
-    });
-}
+// Store active time updates
+const activeUpdates = new Map(); // {chatId: {messageId, interval, timezone}}
 
 export function setupTimeCommand(bot) {
-    bot.onText(/\/(time|tm|t)(?:\s+(.+))?/, async (msg, match) => {
-        const chatId = msg.chat.id;
-        const location = match[2]?.trim();
-
-        if (!location) {
-            return bot.sendMessage(chatId, 
-                "Please provide a city or country name.\nExample: `/time Paris` or `/t Japan`", 
-                { parse_mode: 'Markdown' }
-            );
+    // Clear any existing update when starting a new one
+    function clearExistingUpdate(chatId) {
+        const existing = activeUpdates.get(chatId);
+        if (existing) {
+            clearInterval(existing.interval);
+            activeUpdates.delete(chatId);
         }
+    }
 
-        try {
-            const matchedZone = findTimezone(location);
+    function formatTimeMessage(timezone) {
+        const time = moment().tz(timezone);
+        const city = timezone.split('/').pop().replace('_', ' ');
+        return `*${city}: ${time.format('HH:mm')}\n${time.format('MMMM D YYYY')}*`;
+    }
 
-            if (!matchedZone) {
-                return bot.sendMessage(chatId, 
-                    "Sorry, I couldn't find that location. Please try another city or country name.",
-                    { parse_mode: 'Markdown' }
-                );
-            }
+    function startTimeUpdate(chatId, timezone) {
+        clearExistingUpdate(chatId);
 
-            // Send initial time
-            const sentMsg = await bot.sendMessage(chatId, 
-                formatTimeMessage(matchedZone), 
-                { parse_mode: 'Markdown' }
-            );
-
-            // Update time every second for 5 minutes (300 seconds)
-            let updates = 0;
-            const intervalId = setInterval(() => {
-                updates++;
-                if (updates >= 300) {
-                    clearInterval(intervalId);
-                    return;
-                }
-
-                bot.editMessageText(
-                    formatTimeMessage(matchedZone),
-                    {
-                        chat_id: chatId,
-                        message_id: sentMsg.message_id,
-                        parse_mode: 'Markdown'
+        bot.sendMessage(chatId, formatTimeMessage(timezone), { parse_mode: 'Markdown' })
+            .then(msg => {
+                const interval = setInterval(async () => {
+                    try {
+                        await bot.editMessageText(formatTimeMessage(timezone), {
+                            chat_id: chatId,
+                            message_id: msg.message_id,
+                            parse_mode: 'Markdown'
+                        });
+                    } catch (error) {
+                        console.error('Error updating time:', error);
+                        clearExistingUpdate(chatId);
                     }
-                ).catch(error => {
-                    clearInterval(intervalId);
-                    console.error('Error updating time:', error);
+                }, 60000);
+
+                activeUpdates.set(chatId, {
+                    messageId: msg.message_id,
+                    interval: interval,
+                    timezone: timezone
                 });
-            }, 1000);
-        } catch (error) {
-            console.error('Time command error:', error);
+
+                // Set timeout to quietly stop updates after 6 hours
+                setTimeout(() => {
+                    clearExistingUpdate(chatId);
+                }, 6 * 60 * 60 * 1000);
+            });
+    }
+
+    // Handle time command
+    bot.onText(/\/(time|tm|t)(?:\s+(.+))?/, (msg, match) => {
+        const chatId = msg.chat.id;
+        let timezone = match[2]?.toLowerCase();
+
+        // Show instructions if no timezone specified
+        if (!timezone) {
             bot.sendMessage(chatId, 
-                "Sorry, there was an error processing your request. Please try again.",
+                "Please provide a city or country name.\nExample: */time Paris*, */tm Paris* or */t Japan*", 
                 { parse_mode: 'Markdown' }
             );
+            return;
         }
+
+        timezone = timezoneMappings[timezone] || timezone;
+
+        // Validate timezone
+        if (!moment.tz.zone(timezone)) {
+            bot.sendMessage(chatId, `Invalid timezone. Please try again with a valid timezone.`);
+            return;
+        }
+
+        startTimeUpdate(chatId, timezone);
     });
 }
