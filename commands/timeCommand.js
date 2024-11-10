@@ -27,7 +27,7 @@ export function setupTimeCommand(bot) {
     function formatTimeMessage(timezone) {
         const time = moment().tz(timezone);
         const city = timezone.split('/').pop().replace('_', ' ');
-        return `*${city}: ${time.format('HH:mm')}\n${time.format('MMMM D YYYY')}*`;
+        return `*${city}: ${time.format('h:mm A')}\n${time.format('dddd, MMMM D YYYY')}*`;
     }
 
     function startTimeUpdate(chatId, timezone) {
