@@ -18,7 +18,7 @@
 
 ## Subscriptions Available Commands
 
-- [ ] /jokes, /jk - sends a random joke
+- [x] /jokes, /jk - sends a random joke
 
 - [x] /meme, /mm - sends a random meme from Reddit
 
