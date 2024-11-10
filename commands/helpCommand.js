@@ -43,7 +43,7 @@ I am a versatile personal assistant bot currently under development.`;
                 break;
 
             case 'help_about':
-                const aboutText = `*About Nite Bot*\nA versatile Telegram bot.\nVersion: 1.0\nDeveloper: @lordaimer`;
+                const aboutText = `*Nite v1.1*\nA versatile Telegram bot.\nDeveloper: @lordaimer`;
                 bot.editMessageText(aboutText, {
                     chat_id: chatId,
                     message_id: messageId,
