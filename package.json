@@ -11,8 +11,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "compromise": "^14.14.2",
     "dotenv": "^16.4.5",
     "moment-timezone": "^0.5.46",
-    "node-telegram-bot-api": "^0.66.0"
+    "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^0.63.0",
+    "url-parse": "^1.5.10"
   }
 }
