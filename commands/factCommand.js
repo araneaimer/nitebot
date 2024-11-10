@@ -1,49 +1,56 @@
 import fetch from 'node-fetch';
 
 const categories = [
-    { text: '🧠 Random', callback_data: 'fact_random' },
-    { text: '🔬 Science', callback_data: 'fact_science' },
-    { text: '🦁 Animals', callback_data: 'fact_animals' },
-    { text: '📜 History', callback_data: 'fact_history' },
-    { text: '🎨 Art', callback_data: 'fact_art' },
-    { text: '🏺 Culture', callback_data: 'fact_culture' }
+    { text: '🎲 Random', callback_data: 'fact_random' },
+    { text: '🧪 Science', callback_data: 'fact_science' },
+    { text: '🐾 Animals', callback_data: 'fact_animals' },
+    { text: '⌛ History', callback_data: 'fact_history' },
+    { text: '🎭 Art', callback_data: 'fact_art' },
+    { text: '🌏 Culture', callback_data: 'fact_culture' }
 ];
 
 async function getFact(category = '') {
+    // Try Ninja API first
     const apiKey = process.env.NINJA_API_KEY;
-    console.log('API Key:', apiKey);
-    
-    const url = `https://api.api-ninjas.com/v1/facts${category ? `?category=${category}` : ''}`;
-    console.log('Fetching from URL:', url);
+    const ninjaUrl = `https://api.api-ninjas.com/v1/facts${category ? `?category=${category}` : ''}`;
+    console.log('Trying Ninja API URL:', ninjaUrl);
     
     try {
-        const response = await fetch(url, {
+        const response = await fetch(ninjaUrl, {
             headers: {
                 'X-Api-Key': apiKey
             }
         });
         
         if (!response.ok) {
-            console.error('API Response not OK:', {
-                status: response.status,
-                statusText: response.statusText
-            });
-            const errorBody = await response.text();
-            console.error('Error body:', errorBody);
             throw new Error(`API responded with status ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('API Response:', data);
-        
         if (!data || !Array.isArray(data) || data.length === 0) {
             throw new Error('Invalid data format received');
         }
 
         return data[0].fact;
     } catch (error) {
-        console.error('Error fetching fact:', error);
-        return `Error: ${error.message}. Please make sure the API key is configured correctly.`;
+        console.error('Error fetching from Ninja API:', error);
+        
+        // Fallback to useless facts API
+        console.log('Trying fallback API...');
+        try {
+            const fallbackUrl = 'https://uselessfacts.jsph.pl/api/v2/facts/random';
+            const fallbackResponse = await fetch(fallbackUrl);
+            
+            if (!fallbackResponse.ok) {
+                throw new Error(`Fallback API responded with status ${fallbackResponse.status}`);
+            }
+
+            const fallbackData = await fallbackResponse.json();
+            return fallbackData.text;
+        } catch (fallbackError) {
+            console.error('Error fetching from fallback API:', fallbackError);
+            return 'Sorry, couldn\'t fetch a fact right now. Please try again later.';
+        }
     }
 }
 
