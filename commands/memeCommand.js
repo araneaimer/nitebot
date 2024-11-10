@@ -65,19 +65,29 @@ const setupMemeCommand = (bot) => {
         const chatId = msg.chat.id;
         
         try {
-            // Send "typing" action
+            // Start with an immediate action
             await bot.sendChatAction(chatId, 'upload_photo');
             
-            const meme = await getMemeFromReddit();
+            // Then set up the interval to keep it going
+            const actionInterval = setInterval(() => {
+                bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
+            }, 3000);
             
-            const caption = `${meme.title}\n\n` +
-                          `👤 u/${meme.author}\n` +
-                          `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
-                          `🔗 r/${meme.subreddit}`;
+            try {
+                const meme = await getMemeFromReddit();
+                
+                const caption = `${meme.title}\n\n` +
+                              `👤 u/${meme.author}\n` +
+                              `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
+                              `🔗 r/${meme.subreddit}`;
 
-            await bot.sendPhoto(chatId, meme.url, {
-                caption: caption
-            });
+                await bot.sendPhoto(chatId, meme.url, {
+                    caption: caption
+                });
+            } finally {
+                // Always clear the interval when done
+                clearInterval(actionInterval);
+            }
 
         } catch (error) {
             console.error('Meme command error:', error);

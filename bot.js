@@ -6,6 +6,7 @@ import { setupHelpCommand } from './commands/helpCommand.js';
 import { setupStartCommand } from './commands/startCommand.js';
 import { setupCurrencyCommand } from './commands/currencyCommand.js';
 import { setupMemeCommand } from './commands/memeCommand.js';
+import { setupJokeCommand } from './commands/jokeCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -24,3 +25,4 @@ setupHelpCommand(bot);
 setupStartCommand(bot);
 setupCurrencyCommand(bot);
 setupMemeCommand(bot);
+setupJokeCommand(bot);

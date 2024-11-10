@@ -20,7 +20,7 @@
 
 - [ ] /jokes, /jk - sends a random joke
 
-- [ ] /meme, /mm - sends a random meme from Reddit
+- [x] /meme, /mm - sends a random meme from Reddit
 
 - [ ] /fact, /ft - sends a random fact
 
