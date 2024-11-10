@@ -15,6 +15,7 @@
     "compromise": "^14.14.2",
     "dotenv": "^16.4.5",
     "moment-timezone": "^0.5.46",
+    "natural": "^8.0.1",
     "node-fetch": "^3.3.2",
     "node-telegram-bot-api": "^0.66.0",
     "url-parse": "^1.5.10"
