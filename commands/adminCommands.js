@@ -1,4 +1,6 @@
-const userSet = new Set(); // Stores unique user IDs
+let maintenanceMode = false;
+let maintenanceStartTime = null;
+const userSet = new Set();
 
 // Track active chat IDs (you might want to persist this in a database later)
 const activeChatIds = new Set();
@@ -52,6 +54,124 @@ export const setupAdminCommands = (bot) => {
         const userId = msg.from.id.toString();
         return userId === ADMIN_USER_ID;
     };
+
+    // Middleware to check maintenance mode
+    bot.on('message', async (msg) => {
+        // Always allow admin
+        if (isAdmin(msg)) return;
+
+        // If in maintenance mode, block all non-admin messages
+        if (maintenanceMode) {
+            const maintenanceTime = maintenanceStartTime 
+                ? `\nMaintenance started: ${maintenanceStartTime.toLocaleString()}`
+                : '';
+
+            await bot.sendMessage(msg.chat.id, 
+                `🛠 *Bot is currently under maintenance*\n\n` +
+                `We're performing some updates to improve our service.${maintenanceTime}\n\n` +
+                `Please try again later!`,
+                { parse_mode: 'Markdown' }
+            );
+            return;
+        }
+
+        // Track user if not in maintenance mode
+        if (msg.from.id) {
+            userSet.add(msg.from.id.toString());
+        }
+    });
+
+    // Enhanced maintenance command
+    bot.onText(/\/maintenance (.+)/, async (msg, match) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+
+        const action = match[1].toLowerCase();
+        try {
+            switch (action) {
+                case 'on':
+                case 'start':
+                    maintenanceMode = true;
+                    maintenanceStartTime = new Date();
+                    await bot.sendMessage(msg.chat.id, 
+                        "🛠 *Maintenance Mode Activated*\n\n" +
+                        "• All non-admin commands are now disabled\n" +
+                        "• Users will see maintenance message\n" +
+                        "• Use `/maintenance off` to deactivate",
+                        { parse_mode: 'Markdown' }
+                    );
+                    break;
+
+                case 'off':
+                case 'stop':
+                    maintenanceMode = false;
+                    const duration = maintenanceStartTime 
+                        ? `\nMaintenance duration: ${getTimeDifference(maintenanceStartTime, new Date())}`
+                        : '';
+                    maintenanceStartTime = null;
+                    await bot.sendMessage(msg.chat.id, 
+                        "✅ *Maintenance Mode Deactivated*\n\n" +
+                        "• Bot is now fully operational\n" +
+                        "• All commands are enabled" +
+                        duration,
+                        { parse_mode: 'Markdown' }
+                    );
+                    break;
+
+                case 'status':
+                    const status = maintenanceMode
+                        ? `🛠 *Maintenance Mode is ACTIVE*\n\nStarted: ${maintenanceStartTime.toLocaleString()}\nDuration: ${getTimeDifference(maintenanceStartTime, new Date())}`
+                        : "✅ *Maintenance Mode is OFF*\n\nBot is operating normally";
+                    await bot.sendMessage(msg.chat.id, status, { parse_mode: 'Markdown' });
+                    break;
+
+                default:
+                    await bot.sendMessage(msg.chat.id,
+                        "❌ *Invalid maintenance command*\n\n" +
+                        "Valid options:\n" +
+                        "• `/maintenance on` - Enable maintenance mode\n" +
+                        "• `/maintenance off` - Disable maintenance mode\n" +
+                        "• `/maintenance status` - Check current status",
+                        { parse_mode: 'Markdown' }
+                    );
+            }
+        } catch (error) {
+            console.error('Maintenance command error:', error);
+            await bot.sendMessage(msg.chat.id, "❌ Error executing maintenance command.");
+        }
+    });
+
+    // Enhanced stats command with maintenance info
+    bot.onText(/\/stats/, async (msg) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+        
+        try {
+            const maintenanceStatus = maintenanceMode
+                ? `🛠 *MAINTENANCE MODE ACTIVE*\n` +
+                  `Started: ${maintenanceStartTime.toLocaleString()}\n` +
+                  `Duration: ${getTimeDifference(maintenanceStartTime, new Date())}\n\n`
+                : '✅ Bot is operating normally\n\n';
+
+            const stats = {
+                totalUsers: userSet.size,
+                lastUpdated: new Date().toLocaleString()
+            };
+            
+            await bot.sendMessage(msg.chat.id, 
+                `📊 *Bot Statistics*\n\n` +
+                maintenanceStatus +
+                `Total Unique Users: ${stats.totalUsers}\n` +
+                `Last Updated: ${stats.lastUpdated}`,
+                { parse_mode: 'Markdown' }
+            );
+        } catch (error) {
+            console.error('Stats command error:', error);
+            await bot.sendMessage(msg.chat.id, "❌ Error fetching statistics.");
+        }
+    });
 
     // Track new users but exclude admin
     bot.on('message', (msg) => {
@@ -187,71 +307,6 @@ export const setupAdminCommands = (bot) => {
         );
     });
 
-    // Command to stop/restart bot
-    bot.onText(/\/maintenance (.+)/, async (msg, match) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
-
-        const action = match[1].toLowerCase();
-        try {
-            if (action === 'stop') {
-                await bot.sendMessage(msg.chat.id, "🔄 Bot is going into maintenance mode...");
-                // Implement your stop logic
-            } else if (action === 'start') {
-                await bot.sendMessage(msg.chat.id, "✅ Bot is now active again!");
-                // Implement your start logic
-            }
-        } catch (error) {
-            console.error('Maintenance command error:', error);
-            await bot.sendMessage(msg.chat.id, "❌ Error executing maintenance command.");
-        }
-    });
-
-    // Helper function to generate help message for a specific page
-    const generateHelpMessage = (page) => {
-        const totalPages = Math.ceil(adminCommands.length / COMMANDS_PER_PAGE);
-        const startIdx = (page - 1) * COMMANDS_PER_PAGE;
-        const commands = adminCommands.slice(startIdx, startIdx + COMMANDS_PER_PAGE);
-
-        let message = `📚 *Admin Commands Help* (Page ${page}/${totalPages})\n\n`;
-        
-        commands.forEach(cmd => {
-            message += `*${cmd.command}*\n`;
-            message += `📝 Description: ${cmd.description}\n`;
-            message += `🔍 Usage: ${cmd.usage}\n`;
-            message += `💡 Example: \`${cmd.example}\`\n\n`;
-        });
-
-        return message;
-    };
-
-    // Helper function to create keyboard buttons
-    const generateKeyboard = (currentPage) => {
-        const totalPages = Math.ceil(adminCommands.length / COMMANDS_PER_PAGE);
-        const buttons = [];
-
-        if (currentPage > 1) {
-            buttons.push({
-                text: '⬅️ Previous',
-                callback_data: `admin_help_${currentPage - 1}`
-            });
-        }
-
-        if (currentPage < totalPages) {
-            buttons.push({
-                text: 'Next ➡️',
-                callback_data: `admin_help_${currentPage + 1}`
-            });
-        }
-
-        return {
-            reply_markup: {
-                inline_keyboard: [buttons]
-            }
-        };
-    };
-
     // Admin help command
     bot.onText(/\/admin/, async (msg) => {
         if (!isAdmin(msg)) {
@@ -300,6 +355,50 @@ export const setupAdminCommands = (bot) => {
     });
 };
 
+// Helper function to generate help message for a specific page
+const generateHelpMessage = (page) => {
+    const totalPages = Math.ceil(adminCommands.length / COMMANDS_PER_PAGE);
+    const startIdx = (page - 1) * COMMANDS_PER_PAGE;
+    const commands = adminCommands.slice(startIdx, startIdx + COMMANDS_PER_PAGE);
+
+    let message = `📚 *Admin Commands Help* (Page ${page}/${totalPages})\n\n`;
+    
+    commands.forEach(cmd => {
+        message += `*${cmd.command}*\n`;
+        message += `📝 Description: ${cmd.description}\n`;
+        message += `🔍 Usage: ${cmd.usage}\n`;
+        message += `💡 Example: \`${cmd.example}\`\n\n`;
+    });
+
+    return message;
+};
+
+// Helper function to create keyboard buttons
+const generateKeyboard = (currentPage) => {
+    const totalPages = Math.ceil(adminCommands.length / COMMANDS_PER_PAGE);
+    const buttons = [];
+
+    if (currentPage > 1) {
+        buttons.push({
+            text: '⬅️ Previous',
+            callback_data: `admin_help_${currentPage - 1}`
+        });
+    }
+
+    if (currentPage < totalPages) {
+        buttons.push({
+            text: 'Next ➡️',
+            callback_data: `admin_help_${currentPage + 1}`
+        });
+    }
+
+    return {
+        reply_markup: {
+            inline_keyboard: [buttons]
+        }
+    };
+};
+
 // Helper function to update broadcast status
 async function updateBroadcastStatus(bot, chatId, messageId, successful, failed) {
     try {
@@ -317,4 +416,14 @@ async function updateBroadcastStatus(bot, chatId, messageId, successful, failed)
     } catch (error) {
         console.error('Error updating broadcast status:', error);
     }
+}
+
+// Helper function to calculate time difference
+function getTimeDifference(startDate, endDate) {
+    const diff = Math.abs(endDate - startDate);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    return `${hours}h ${minutes}m ${seconds}s`;
 } 
