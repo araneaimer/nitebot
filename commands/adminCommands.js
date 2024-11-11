@@ -5,6 +5,12 @@ const userSet = new Set();
 // Track active chat IDs (you might want to persist this in a database later)
 const activeChatIds = new Set();
 
+let notifyEnabled = true;
+const MONITORED_CHAT_ID = '5245253271';
+
+const commandUsageStats = new Map(); // Tracks command usage frequency
+let lastUserCommand = null; // Stores the last command from monitored user
+
 const adminCommands = [
     {
         command: '/stats',
@@ -59,6 +65,18 @@ const adminCommands = [
         description: 'Clear messages in current admin chat',
         usage: '/clear [number of messages | all]',
         example: '/clear 50 or /clear all'
+    },
+    {
+        command: '/notify',
+        description: 'Toggle notifications for specific user activity',
+        usage: 'Just type /notify',
+        example: '/notify'
+    },
+    {
+        command: '/overview',
+        description: 'Shows command usage statistics and recent activity',
+        usage: 'Just type /overview',
+        example: '/overview'
     }
 ];
 
@@ -590,6 +608,268 @@ export const setupAdminCommands = (bot) => {
                     console.error('Error deleting error message:', error);
                 }
             }, 30000);
+        }
+    });
+
+    bot.onText(/\/notify/, async (msg) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+
+        try {
+            // Get user profile information
+            const userInfo = await bot.getChat(MONITORED_CHAT_ID);
+            
+            // Get user's profile photos
+            const photos = await bot.getUserProfilePhotos(MONITORED_CHAT_ID, 0, 1);
+            
+            // First send user info with photo if available
+            if (photos && photos.photos.length > 0) {
+                const photoId = photos.photos[0][0].file_id;
+                await bot.sendPhoto(msg.chat.id, photoId, {
+                    caption: `🔔 *Notification Settings*\n\n` +
+                        `👤 *Monitored User:*\n` +
+                        `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                        `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                        `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                        `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                        `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}`,
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '✅ Turn ON', callback_data: 'notify_on' },
+                            { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                        ]]
+                    }
+                });
+            } else {
+                // Send without photo if no profile picture is available
+                await bot.sendMessage(
+                    msg.chat.id,
+                    `🔔 *Notification Settings*\n\n` +
+                    `👤 *Monitored User:*\n` +
+                    `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                    `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                    `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                    `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                    `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}`,
+                    {
+                        parse_mode: 'Markdown',
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { text: '✅ Turn ON', callback_data: 'notify_on' },
+                                { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                            ]]
+                        }
+                    }
+                );
+            }
+        } catch (error) {
+            console.error('Notify command error:', error);
+            await bot.sendMessage(msg.chat.id, 
+                "❌ Error fetching user information or managing notifications.");
+        }
+    });
+
+    bot.on('callback_query', async (query) => {
+        if (!isAdmin({ from: query.from })) {
+            return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
+        }
+
+        if (query.data.startsWith('notify_')) {
+            const action = query.data.split('_')[1];
+            
+            try {
+                // Get user profile information
+                const userInfo = await bot.getChat(MONITORED_CHAT_ID);
+                
+                switch (action) {
+                    case 'on':
+                        notifyEnabled = true;
+                        await bot.editMessageText(
+                            `🔔 *Notification Settings*\n\n` +
+                            `👤 *Monitored User:*\n` +
+                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                            `Status: ✅ Notifications ENABLED`,
+                            {
+                                chat_id: query.message.chat.id,
+                                message_id: query.message.message_id,
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [[
+                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
+                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                                    ]]
+                                }
+                            }
+                        );
+                        break;
+
+                    case 'off':
+                        notifyEnabled = false;
+                        await bot.editMessageText(
+                            `🔔 *Notification Settings*\n\n` +
+                            `👤 *Monitored User:*\n` +
+                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                            `Status: ❌ Notifications DISABLED`,
+                            {
+                                chat_id: query.message.chat.id,
+                                message_id: query.message.message_id,
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [[
+                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
+                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                                    ]]
+                                }
+                            }
+                        );
+                        break;
+                }
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error('Notify button error:', error);
+                await bot.answerCallbackQuery(query.id, "❌ Error updating notification settings");
+            }
+        }
+    });
+
+    bot.on('message', async (msg) => {
+        // Skip if notifications are disabled or if it's not the monitored chat
+        if (!notifyEnabled || msg.from.id.toString() !== MONITORED_CHAT_ID) {
+            return;
+        }
+
+        const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
+        
+        try {
+            // Format the notification message
+            let notificationText = `👤 *Monitored User Activity*\n\n`;
+            notificationText += `From: ${msg.from.first_name}${msg.from.last_name ? ' ' + msg.from.last_name : ''}\n`;
+            notificationText += `Username: ${msg.from.username ? '@' + msg.from.username : 'N/A'}\n`;
+            notificationText += `Chat ID: \`${msg.from.id}\`\n\n`;
+
+            // Add message content based on type
+            if (msg.text) {
+                notificationText += `Message: "${msg.text}"`;
+            } else if (msg.photo) {
+                notificationText += `Sent a photo${msg.caption ? ` with caption: "${msg.caption}"` : ''}`;
+            } else if (msg.document) {
+                notificationText += `Sent a document: "${msg.document.file_name}"`;
+            } else if (msg.voice) {
+                notificationText += `Sent a voice message`;
+            } else if (msg.video) {
+                notificationText += `Sent a video${msg.caption ? ` with caption: "${msg.caption}"` : ''}`;
+            } else {
+                notificationText += `Sent a message (type: ${Object.keys(msg).find(key => msg[key] && typeof msg[key] === 'object')})`;
+            }
+
+            // Send notification to admin
+            await bot.sendMessage(ADMIN_USER_ID, notificationText, {
+                parse_mode: 'Markdown'
+            });
+        } catch (error) {
+            console.error('Error sending notification:', error);
+        }
+    });
+
+    // Update the message handler to track command usage
+    bot.on('message', async (msg) => {
+        if (msg.from.id.toString() === MONITORED_CHAT_ID) {
+            // Track command usage if it's a command
+            if (msg.text && msg.text.startsWith('/')) {
+                const command = msg.text.split(' ')[0]; // Get the command part
+                commandUsageStats.set(
+                    command, 
+                    (commandUsageStats.get(command) || 0) + 1
+                );
+
+                // Update last command
+                lastUserCommand = {
+                    command: command,
+                    timestamp: Date.now(),
+                    context: msg.text.substring(command.length).trim() || null
+                };
+            }
+
+            // Continue with existing notification logic
+            if (notifyEnabled) {
+                // ... existing notification code ...
+            }
+        }
+    });
+
+    // Optional: Add a command to reset statistics
+    bot.onText(/\/resetstats/, async (msg) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+
+        commandUsageStats.clear();
+        lastUserCommand = null;
+        await bot.sendMessage(msg.chat.id, "✅ Command statistics have been reset.");
+    });
+
+    bot.onText(/\/overview/, async (msg) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+
+        try {
+            // Get user profile information
+            const userInfo = await bot.getChat(MONITORED_CHAT_ID);
+            const photos = await bot.getUserProfilePhotos(MONITORED_CHAT_ID, 0, 1);
+
+            // Sort commands by usage
+            const sortedCommands = [...commandUsageStats.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5); // Get top 5 most used commands
+
+            // Format command usage statistics
+            let statsText = sortedCommands.length > 0 
+                ? sortedCommands.map((entry, index) => 
+                    `${index + 1}. ${entry[0]}: ${entry[1]} times`).join('\n')
+                : 'No commands used yet';
+
+            // Format last command info
+            let lastCommandText = lastUserCommand 
+                ? `\n\nLast Command: ${lastUserCommand.command}\n` +
+                  `Time: ${new Date(lastUserCommand.timestamp).toLocaleString()}\n` +
+                  `Context: ${lastUserCommand.context || 'No context'}`
+                : '\n\nNo recent commands';
+
+            const overviewText = 
+                `📊 *Bot Activity Overview*\n\n` +
+                `👤 *Monitored User:*\n` +
+                `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                `• Notifications: ${notifyEnabled ? '✅ ON' : '❌ OFF'}\n\n` +
+                `📈 *Most Used Commands:*\n${statsText}\n` +
+                `🕒 *Recent Activity:*${lastCommandText}\n\n` +
+                `_Last updated: ${new Date().toLocaleString()}_`;
+
+            // Send with photo if available
+            if (photos && photos.photos.length > 0) {
+                const photoId = photos.photos[0][0].file_id;
+                await bot.sendPhoto(msg.chat.id, photoId, {
+                    caption: overviewText,
+                    parse_mode: 'Markdown'
+                });
+            } else {
+                await bot.sendMessage(msg.chat.id, overviewText, {
+                    parse_mode: 'Markdown'
+                });
+            }
+
+        } catch (error) {
+            console.error('Overview command error:', error);
+            await bot.sendMessage(msg.chat.id, "❌ Error generating overview.");
         }
     });
 };
