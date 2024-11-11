@@ -53,6 +53,12 @@ const adminCommands = [
         description: 'Show system information and bot health',
         usage: 'Just type /debug',
         example: '/debug'
+    },
+    {
+        command: '/clear',
+        description: 'Clear recent messages in current chat',
+        usage: '/clear [number of messages]',
+        example: '/clear 50'
     }
 ];
 
@@ -428,6 +434,80 @@ export const setupAdminCommands = (bot) => {
             { parse_mode: 'Markdown' }
         );
     });
+
+    bot.onText(/\/clear(?:\s+(\d+))?/, async (msg, match) => {
+        if (!isAdmin(msg)) {
+            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+        }
+
+        const amount = parseInt(match[1]) || 100; // Default to 100 messages if no number specified
+        const statusMsg = await bot.sendMessage(msg.chat.id, "🗑 Starting cleanup...");
+        let deletedCount = 0;
+        let failedCount = 0;
+
+        try {
+            // Get message IDs from current to older messages
+            for (let i = msg.message_id; i > msg.message_id - amount; i--) {
+                try {
+                    await bot.deleteMessage(msg.chat.id, i);
+                    deletedCount++;
+
+                    // Update status every 10 deletions
+                    if (deletedCount % 10 === 0) {
+                        await bot.editMessageText(
+                            `🗑 Cleaning messages...\n\n` +
+                            `✅ Deleted: ${deletedCount}\n` +
+                            `❌ Failed: ${failedCount}`,
+                            {
+                                chat_id: msg.chat.id,
+                                message_id: statusMsg.message_id
+                            }
+                        );
+                    }
+                } catch (error) {
+                    failedCount++;
+                    continue;
+                }
+            }
+
+            // Send final status
+            const finalMessage = await bot.editMessageText(
+                `🧹 *Cleanup Complete*\n\n` +
+                `✅ Successfully deleted: ${deletedCount} messages\n` +
+                `❌ Failed/Skipped: ${failedCount} messages\n\n` +
+                `Note: Messages older than 48 hours cannot be deleted.\n\n` +
+                `_This message will self-destruct in 30 seconds..._`,
+                {
+                    chat_id: msg.chat.id,
+                    message_id: statusMsg.message_id,
+                    parse_mode: 'Markdown'
+                }
+            );
+
+            // Delete the cleanup status message after 30 seconds
+            setTimeout(async () => {
+                try {
+                    await bot.deleteMessage(msg.chat.id, finalMessage.message_id);
+                } catch (error) {
+                    console.error('Error deleting cleanup status message:', error);
+                }
+            }, 30000); // 30 seconds
+
+        } catch (error) {
+            console.error('Clear command error:', error);
+            const errorMsg = await bot.sendMessage(msg.chat.id, 
+                "❌ Error during cleanup. Some messages may not have been deleted.");
+            
+            // Delete error message after 30 seconds too
+            setTimeout(async () => {
+                try {
+                    await bot.deleteMessage(msg.chat.id, errorMsg.message_id);
+                } catch (error) {
+                    console.error('Error deleting error message:', error);
+                }
+            }, 30000);
+        }
+    });
 };
 
 // Helper function to generate help message for a specific page
@@ -456,14 +536,14 @@ const generateKeyboard = (currentPage) => {
 
     if (currentPage > 1) {
         buttons.push({
-            text: '⬅️ Previous',
+            text: '<< Previous',
             callback_data: `admin_help_${currentPage - 1}`
         });
     }
 
     if (currentPage < totalPages) {
         buttons.push({
-            text: 'Next ➡️',
+            text: 'Next >>',
             callback_data: `admin_help_${currentPage + 1}`
         });
     }
