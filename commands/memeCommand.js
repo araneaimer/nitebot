@@ -102,8 +102,21 @@ const setupMemeCommand = (bot) => {
                               `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
                               `🔗 r/${meme.subreddit}`;
 
+                // Modified button text
+                const buttonText = preferredSubreddit 
+                    ? `🔄 Another meme from r/${preferredSubreddit}`
+                    : '🔄 Another random meme';
+
                 await bot.sendPhoto(chatId, meme.url, {
-                    caption: caption
+                    caption: caption,
+                    reply_markup: {
+                        inline_keyboard: [[
+                            {
+                                text: buttonText,
+                                callback_data: `meme_${preferredSubreddit || 'random'}`
+                            }
+                        ]]
+                    }
                 });
             } finally {
                 clearInterval(actionInterval);
@@ -122,6 +135,61 @@ const setupMemeCommand = (bot) => {
             }
             
             await bot.sendMessage(chatId, errorMessage);
+        }
+    });
+
+    // Add callback query handler for the inline button
+    bot.on('callback_query', async (query) => {
+        if (!query.data.startsWith('meme_')) return;
+
+        const chatId = query.message.chat.id;
+        const subreddit = query.data.replace('meme_', '');
+        
+        try {
+            await bot.answerCallbackQuery(query.id);
+            await bot.sendChatAction(chatId, 'upload_photo');
+            
+            const actionInterval = setInterval(() => {
+                bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
+            }, 3000);
+            
+            try {
+                const meme = await getMemeFromReddit(subreddit === 'random' ? null : subreddit);
+                
+                const caption = `${meme.title}\n\n` +
+                              `👤 u/${meme.author}\n` +
+                              `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
+                              `🔗 r/${meme.subreddit}`;
+
+                await bot.sendPhoto(chatId, meme.url, {
+                    caption: caption,
+                    reply_markup: {
+                        inline_keyboard: [[
+                            {
+                                text: '🔄 Another Meme',
+                                callback_data: `meme_${subreddit}`
+                            }
+                        ]]
+                    }
+                });
+            } finally {
+                clearInterval(actionInterval);
+            }
+        } catch (error) {
+            let errorMessage = '😕 Sorry, I couldn\'t fetch a meme right now. Please try again later.';
+            
+            if (error.message === 'Subreddit not found or has no posts') {
+                errorMessage = '❌ This subreddit doesn\'t exist or has no posts. Please try another one.';
+            } else if (error.response?.status === 403) {
+                errorMessage = '❌ This subreddit is private or quarantined.';
+            } else if (error.response?.status === 404) {
+                errorMessage = '❌ Subreddit not found.';
+            }
+            
+            await bot.answerCallbackQuery(query.id, {
+                text: errorMessage,
+                show_alert: true
+            });
         }
     });
 };
