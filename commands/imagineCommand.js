@@ -78,7 +78,12 @@ export function setupImageCommand(bot) {
                 }
             );
             
-            await bot.answerCallbackQuery(query.id);
+            try {
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error(`Failed to answer callback query: ${error.message}`);
+                // Continue execution since this is not a critical error
+            }
             return;
         }
 
@@ -164,7 +169,12 @@ export function setupImageCommand(bot) {
             }
 
             userSessions.delete(chatId);
-            await bot.answerCallbackQuery(query.id);
+            try {
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error(`Failed to answer callback query: ${error.message}`);
+                // Continue execution since this is not a critical error
+            }
         }
     });
 } 
