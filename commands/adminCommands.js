@@ -56,9 +56,9 @@ const adminCommands = [
     },
     {
         command: '/clear',
-        description: 'Clear recent messages in current chat',
-        usage: '/clear [number of messages]',
-        example: '/clear 50'
+        description: 'Clear messages and/or data from the bot',
+        usage: '/clear [number of messages | all]',
+        example: '/clear 50 or /clear all'
     }
 ];
 
@@ -435,12 +435,101 @@ export const setupAdminCommands = (bot) => {
         );
     });
 
-    bot.onText(/\/clear(?:\s+(\d+))?/, async (msg, match) => {
+    bot.onText(/\/clear(?:\s+(\S+))?/, async (msg, match) => {
         if (!isAdmin(msg)) {
             return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
         }
 
-        const amount = parseInt(match[1]) || 100; // Default to 100 messages if no number specified
+        const param = match[1]?.toLowerCase();
+
+        // Handle "clear all" case
+        if (param === 'all') {
+            const confirmMsg = await bot.sendMessage(
+                msg.chat.id,
+                `⚠️ *WARNING*: This will:\n` +
+                `• Clear all messages in this chat\n` +
+                `• Reset all user statistics\n` +
+                `• Clear all active chat IDs\n\n` +
+                `Are you sure? Reply with /confirm within 30 seconds to proceed.`,
+                { parse_mode: 'Markdown' }
+            );
+
+            // Set up confirmation handler
+            const confirmHandler = async (confirmMsg) => {
+                if (confirmMsg.text === '/confirm' && confirmMsg.from.id.toString() === process.env.ADMIN_USER_ID) {
+                    try {
+                        // Clear messages
+                        const statusMsg = await bot.sendMessage(msg.chat.id, "🗑 Starting full cleanup...");
+                        let deletedCount = 0;
+                        
+                        // Delete recent messages
+                        for (let i = msg.message_id; i > msg.message_id - 1000; i--) {
+                            try {
+                                await bot.deleteMessage(msg.chat.id, i);
+                                deletedCount++;
+                            } catch (error) {
+                                continue;
+                            }
+                        }
+
+                        // Clear all stored data
+                        userSet.clear();
+                        activeChatIds.clear();
+                        
+                        const finalMessage = await bot.sendMessage(
+                            msg.chat.id,
+                            `🧹 *Complete System Cleanup*\n\n` +
+                            `✅ Cleared all user statistics\n` +
+                            `✅ Reset active chat list\n` +
+                            `✅ Deleted ${deletedCount} messages\n\n` +
+                            `_This message will self-destruct in 30 seconds..._`,
+                            { parse_mode: 'Markdown' }
+                        );
+
+                        // Delete the final message after 30 seconds
+                        setTimeout(async () => {
+                            try {
+                                await bot.deleteMessage(msg.chat.id, finalMessage.message_id);
+                            } catch (error) {
+                                console.error('Error deleting final message:', error);
+                            }
+                        }, 30000);
+
+                    } catch (error) {
+                        console.error('Clear all error:', error);
+                        const errorMsg = await bot.sendMessage(msg.chat.id, "❌ Error during full cleanup.");
+                        
+                        setTimeout(async () => {
+                            try {
+                                await bot.deleteMessage(msg.chat.id, errorMsg.message_id);
+                            } catch (error) {
+                                console.error('Error deleting error message:', error);
+                            }
+                        }, 30000);
+                    }
+                }
+                // Remove the confirmation handler
+                bot.removeListener('message', confirmHandler);
+            };
+
+            // Add temporary confirmation handler
+            bot.on('message', confirmHandler);
+
+            // Remove confirmation handler after 30 seconds
+            setTimeout(() => {
+                bot.removeListener('message', confirmHandler);
+                try {
+                    bot.deleteMessage(msg.chat.id, confirmMsg.message_id);
+                } catch (error) {
+                    console.error('Error deleting confirmation message:', error);
+                }
+            }, 30000);
+
+            return;
+        }
+
+        // Original clear messages functionality
+        const amount = parseInt(param) || 100;
         const statusMsg = await bot.sendMessage(msg.chat.id, "🗑 Starting cleanup...");
         let deletedCount = 0;
         let failedCount = 0;
