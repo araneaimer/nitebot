@@ -22,7 +22,7 @@
 
 - [x] /meme, /mm - sends a random meme from Reddit
 
-- [ ] /fact, /ft - sends a random fact
+- [x] /fact, /ft - sends a random fact
 
 - [ ] /news, /nw - sends the latest 10 news headlines from a specified country
 
