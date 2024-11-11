@@ -24,24 +24,33 @@ const userPreferences = new Map();
 
 const getMemeFromReddit = async (subreddit = null) => {
     try {
-        // Use provided subreddit or get a random one from our curated list
         const targetSubreddit = subreddit || MEME_SUBREDDITS[Math.floor(Math.random() * MEME_SUBREDDITS.length)];
         
-        const response = await axios.get(
-            `https://www.reddit.com/r/${targetSubreddit}/hot.json?limit=50`,
-            {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            }
-        );
+        // Randomly choose a sorting method and time filter
+        const sortMethods = ['hot', 'top', 'new'];
+        const timeFilters = ['all', 'year', 'month', 'week'];
+        const randomSort = sortMethods[Math.floor(Math.random() * sortMethods.length)];
+        const randomTime = timeFilters[Math.floor(Math.random() * timeFilters.length)];
 
-        // Verify if the subreddit exists and has posts
+        // Construct the URL with proper sorting and time parameters
+        let url = `https://www.reddit.com/r/${targetSubreddit}/${randomSort}.json`;
+        if (randomSort === 'top') {
+            url += `?t=${randomTime}`;
+        }
+
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36'
+            },
+            params: {
+                limit: 100
+            }
+        });
+
         if (!response.data.data.children.length) {
             throw new Error('Subreddit not found or has no posts');
         }
 
-        // Get all valid image posts
         const posts = response.data.data.children.filter(post => {
             const isValidImage = post.data.url?.match(/\.(jpg|jpeg|png|gif)$/i);
             return isValidImage && !post.data.is_video && !post.data.stickied;
@@ -51,7 +60,6 @@ const getMemeFromReddit = async (subreddit = null) => {
             throw new Error('No valid memes found');
         }
 
-        // Get a random post from filtered posts
         const randomPost = posts[Math.floor(Math.random() * posts.length)].data;
         
         return {
@@ -60,10 +68,11 @@ const getMemeFromReddit = async (subreddit = null) => {
             author: randomPost.author,
             subreddit: randomPost.subreddit,
             upvotes: randomPost.ups,
-            link: `https://reddit.com${randomPost.permalink}`
+            link: `https://reddit.com${randomPost.permalink}`,
+            sortMethod: randomSort,
+            timeFilter: randomSort === 'top' ? randomTime : null
         };
     } catch (error) {
-        console.error('Error in getMemeFromReddit');
         throw error;
     }
 };
@@ -97,15 +106,24 @@ const setupMemeCommand = (bot) => {
                 const preferredSubreddit = userPreferences.get(chatId);
                 const meme = await getMemeFromReddit(preferredSubreddit);
                 
+                // Calculate padding to align the second column
+                const firstColumnWidth = Math.max(
+                    `👤 u/${meme.author}`.length,
+                    `🔗 r/${meme.subreddit}`.length
+                ) + 4; // Add some extra spacing
+
+                // Create padded strings
+                const authorLine = `👤 u/${meme.author}`.padEnd(firstColumnWidth);
+                const subredditLine = `🔗 r/${meme.subreddit}`.padEnd(firstColumnWidth);
+                
                 const caption = `${meme.title}\n\n` +
-                              `👤 u/${meme.author}\n` +
-                              `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
-                              `🔗 r/${meme.subreddit}`;
+                              `💻 u/${meme.author}\n` +
+                              `⌨️ r/${meme.subreddit}`;
 
                 // Modified button text
                 const buttonText = preferredSubreddit 
-                    ? `🔄 Another meme from r/${preferredSubreddit}`
-                    : '🔄 Another random meme';
+                    ? `🎲 Another meme from r/${preferredSubreddit}`
+                    : '🎲 Another random meme';
 
                 await bot.sendPhoto(chatId, meme.url, {
                     caption: caption,
@@ -156,17 +174,31 @@ const setupMemeCommand = (bot) => {
             try {
                 const meme = await getMemeFromReddit(subreddit === 'random' ? null : subreddit);
                 
+                // Calculate padding to align the second column
+                const firstColumnWidth = Math.max(
+                    `👤 u/${meme.author}`.length,
+                    `🔗 r/${meme.subreddit}`.length
+                ) + 4; // Add some extra spacing
+
+                // Create padded strings
+                const authorLine = `👤 u/${meme.author}`.padEnd(firstColumnWidth);
+                const subredditLine = `🔗 r/${meme.subreddit}`.padEnd(firstColumnWidth);
+                
                 const caption = `${meme.title}\n\n` +
-                              `👤 u/${meme.author}\n` +
-                              `👍 ${meme.upvotes.toLocaleString()} upvotes\n` +
-                              `🔗 r/${meme.subreddit}`;
+                              `${authorLine}👍 ${meme.upvotes.toLocaleString()}\n` +
+                              `${subredditLine}📊 From ${meme.sortMethod}${meme.timeFilter ? '/' + meme.timeFilter : ''}`;
+
+                // Modified button text
+                const buttonText = subreddit !== 'random'
+                    ? `🔄 Another meme from r/${subreddit}`
+                    : '🔄 Another random meme';
 
                 await bot.sendPhoto(chatId, meme.url, {
                     caption: caption,
                     reply_markup: {
                         inline_keyboard: [[
                             {
-                                text: '🔄 Another Meme',
+                                text: buttonText,
                                 callback_data: `meme_${subreddit}`
                             }
                         ]]
