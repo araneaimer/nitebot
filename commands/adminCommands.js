@@ -56,7 +56,7 @@ const adminCommands = [
     },
     {
         command: '/clear',
-        description: 'Clear messages and/or data from the bot',
+        description: 'Clear messages in current admin chat',
         usage: '/clear [number of messages | all]',
         example: '/clear 50 or /clear all'
     }
@@ -447,9 +447,10 @@ export const setupAdminCommands = (bot) => {
             const confirmMsg = await bot.sendMessage(
                 msg.chat.id,
                 `⚠️ *WARNING*: This will:\n` +
-                `• Clear all messages in this chat\n` +
-                `• Reset all user statistics\n` +
-                `• Clear all active chat IDs\n\n` +
+                `• Clear all messages in this admin chat\n` +
+                `• Delete all media files in this chat\n\n` +
+                `Note: This only affects messages in your chat with the bot. ` +
+                `Users' private chats with the bot are unaffected.\n\n` +
                 `Are you sure? Reply with /confirm within 30 seconds to proceed.`,
                 { parse_mode: 'Markdown' }
             );
@@ -471,16 +472,10 @@ export const setupAdminCommands = (bot) => {
                                 continue;
                             }
                         }
-
-                        // Clear all stored data
-                        userSet.clear();
-                        activeChatIds.clear();
                         
                         const finalMessage = await bot.sendMessage(
                             msg.chat.id,
-                            `🧹 *Complete System Cleanup*\n\n` +
-                            `✅ Cleared all user statistics\n` +
-                            `✅ Reset active chat list\n` +
+                            `🧹 *Complete Cleanup*\n\n` +
                             `✅ Deleted ${deletedCount} messages\n\n` +
                             `_This message will self-destruct in 30 seconds..._`,
                             { parse_mode: 'Markdown' }
@@ -497,7 +492,7 @@ export const setupAdminCommands = (bot) => {
 
                     } catch (error) {
                         console.error('Clear all error:', error);
-                        const errorMsg = await bot.sendMessage(msg.chat.id, "❌ Error during full cleanup.");
+                        const errorMsg = await bot.sendMessage(msg.chat.id, "❌ Error during cleanup.");
                         
                         setTimeout(async () => {
                             try {
@@ -580,7 +575,7 @@ export const setupAdminCommands = (bot) => {
                 } catch (error) {
                     console.error('Error deleting cleanup status message:', error);
                 }
-            }, 30000); // 30 seconds
+            }, 30000);
 
         } catch (error) {
             console.error('Clear command error:', error);
