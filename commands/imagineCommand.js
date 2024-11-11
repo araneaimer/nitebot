@@ -143,13 +143,24 @@ export function setupImageCommand(bot) {
             } catch (error) {
                 console.error(`${modelName}: ${error.message}`);
                 
-                await bot.editMessageText(
-                    `❌ Failed to generate image using ${modelName}. Please try again.`,
-                    {
-                        chat_id: chatId,
-                        message_id: messageId
-                    }
-                );
+                try {
+                    await bot.editMessageText(
+                        `❌ Failed to generate image using ${modelName}. Please try again.`,
+                        {
+                            chat_id: chatId,
+                            message_id: messageId
+                        }
+                    );
+                } catch (editError) {
+                    // If editing fails, send a new message instead
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Failed to generate image using ${modelName}. Please try again.`,
+                        {
+                            reply_to_message_id: session.originalMessageId
+                        }
+                    );
+                }
             }
 
             userSessions.delete(chatId);
