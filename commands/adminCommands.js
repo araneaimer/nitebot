@@ -41,10 +41,22 @@ const adminCommands = [
         description: 'Resets all bot statistics',
         usage: 'Just type /clearstats',
         example: '/clearstats'
+    },
+    {
+        command: '/ping',
+        description: 'Check bot response time and status',
+        usage: 'Just type /ping',
+        example: '/ping'
+    },
+    {
+        command: '/debug',
+        description: 'Show system information and bot health',
+        usage: 'Just type /debug',
+        example: '/debug'
     }
 ];
 
-const COMMANDS_PER_PAGE = 2;
+const COMMANDS_PER_PAGE = 4;
 
 export const setupAdminCommands = (bot) => {
     const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Add this to your .env file
@@ -353,6 +365,69 @@ export const setupAdminCommands = (bot) => {
             }
         }
     });
+
+    bot.onText(/\/ping/, async (msg) => {
+        if (!isAdmin(msg)) return;
+        
+        const start = Date.now();
+        const message = await bot.sendMessage(msg.chat.id, "🏓 Pinging...");
+        const end = Date.now();
+        
+        await bot.editMessageText(
+            `🏓 Pong!\n\n` +
+            `Response time: ${end - start}ms\n` +
+            `Bot status: Online ✅\n` +
+            `Server time: ${new Date().toLocaleString()}`,
+            {
+                chat_id: msg.chat.id,
+                message_id: message.message_id
+            }
+        );
+    });
+
+    bot.onText(/\/poll (.+)/, async (msg, match) => {
+        if (!isAdmin(msg)) return;
+        
+        const parts = match[1].split('|').map(part => part.trim());
+        const question = parts[0];
+        const options = parts.slice(1);
+        
+        if (options.length < 2) {
+            return bot.sendMessage(msg.chat.id, 
+                "❌ Please provide at least 2 options separated by |");
+        }
+        
+        // Send poll to all users
+        for (const chatId of activeChatIds) {
+            try {
+                await bot.sendPoll(chatId, question, options, {
+                    is_anonymous: false
+                });
+            } catch (error) {
+                console.error(`Failed to send poll to ${chatId}:`, error);
+            }
+        }
+    });
+
+    bot.onText(/\/debug/, async (msg) => {
+        if (!isAdmin(msg)) return;
+        
+        const memory = process.memoryUsage();
+        const uptime = process.uptime();
+        
+        await bot.sendMessage(msg.chat.id,
+            `🔍 *Debug Information*\n\n` +
+            `*System:*\n` +
+            `• Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n` +
+            `• Memory: ${Math.round(memory.heapUsed / 1024 / 1024)}MB / ${Math.round(memory.heapTotal / 1024 / 1024)}MB\n\n` +
+            `*Bot Stats:*\n` +
+            `• Active Users: ${userSet.size}\n` +
+            `• Active Chats: ${activeChatIds.size}\n` +
+            `• Maintenance: ${maintenanceMode ? 'ON 🛠' : 'OFF ✅'}\n` +
+            `• Node Version: ${process.version}`,
+            { parse_mode: 'Markdown' }
+        );
+    });
 };
 
 // Helper function to generate help message for a specific page
@@ -365,11 +440,12 @@ const generateHelpMessage = (page) => {
     
     commands.forEach(cmd => {
         message += `*${cmd.command}*\n`;
-        message += `📝 Description: ${cmd.description}\n`;
-        message += `🔍 Usage: ${cmd.usage}\n`;
-        message += `💡 Example: \`${cmd.example}\`\n\n`;
+        message += `├ ${cmd.description}\n`;
+        message += `├ Usage: ${cmd.usage}\n`;
+        message += `└ Ex: \`${cmd.example}\`\n\n`;
     });
 
+    message += `_Use the buttons below to navigate_`;
     return message;
 };
 
