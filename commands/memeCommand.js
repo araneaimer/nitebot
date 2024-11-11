@@ -19,19 +19,27 @@ try {
     MEME_SUBREDDITS = ['memes', 'dankmemes', 'wholesomememes'];
 }
 
-const getMemeFromReddit = async () => {
+// Add this after other constants
+const userPreferences = new Map();
+
+const getMemeFromReddit = async (subreddit = null) => {
     try {
-        // Get a random subreddit from our list
-        const randomSubreddit = MEME_SUBREDDITS[Math.floor(Math.random() * MEME_SUBREDDITS.length)];
+        // Use provided subreddit or get a random one from our curated list
+        const targetSubreddit = subreddit || MEME_SUBREDDITS[Math.floor(Math.random() * MEME_SUBREDDITS.length)];
         
         const response = await axios.get(
-            `https://www.reddit.com/r/${randomSubreddit}/hot.json?limit=50`,
+            `https://www.reddit.com/r/${targetSubreddit}/hot.json?limit=50`,
             {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
             }
         );
+
+        // Verify if the subreddit exists and has posts
+        if (!response.data.data.children.length) {
+            throw new Error('Subreddit not found or has no posts');
+        }
 
         // Get all valid image posts
         const posts = response.data.data.children.filter(post => {
@@ -55,26 +63,39 @@ const getMemeFromReddit = async () => {
             link: `https://reddit.com${randomPost.permalink}`
         };
     } catch (error) {
-        console.error('Error in getMemeFromReddit:', error);
+        console.error('Error in getMemeFromReddit');
         throw error;
     }
 };
 
 const setupMemeCommand = (bot) => {
-    bot.onText(/\/(meme|mm)/, async (msg) => {
+    bot.onText(/\/(meme|mm)(?:\s+(\w+))?/, async (msg, match) => {
         const chatId = msg.chat.id;
+        const requestedSubreddit = match[2]?.toLowerCase();
         
         try {
-            // Start with an immediate action
+            // Validate and update subreddit preference if specified
+            if (requestedSubreddit) {
+                if (requestedSubreddit === 'random') {
+                    userPreferences.delete(chatId);
+                    await bot.sendMessage(chatId, '🎲 Set to random subreddits mode!');
+                } else {
+                    // No validation against MEME_SUBREDDITS - allow any subreddit
+                    userPreferences.set(chatId, requestedSubreddit);
+                    await bot.sendMessage(chatId, `✅ Set default subreddit to r/${requestedSubreddit}`);
+                }
+            }
+
             await bot.sendChatAction(chatId, 'upload_photo');
             
-            // Then set up the interval to keep it going
             const actionInterval = setInterval(() => {
                 bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
             }, 3000);
             
             try {
-                const meme = await getMemeFromReddit();
+                // Use user's preferred subreddit if it exists
+                const preferredSubreddit = userPreferences.get(chatId);
+                const meme = await getMemeFromReddit(preferredSubreddit);
                 
                 const caption = `${meme.title}\n\n` +
                               `👤 u/${meme.author}\n` +
@@ -85,16 +106,22 @@ const setupMemeCommand = (bot) => {
                     caption: caption
                 });
             } finally {
-                // Always clear the interval when done
                 clearInterval(actionInterval);
             }
-
+            
         } catch (error) {
-            console.error('Meme command error:', error);
-            await bot.sendMessage(
-                chatId, 
-                '😕 Sorry, I couldn\'t fetch a meme right now. Please try again later.'
-            );
+            let errorMessage = '😕 Sorry, I couldn\'t fetch a meme right now. Please try again later.';
+            
+            // Provide more specific error messages
+            if (error.message === 'Subreddit not found or has no posts') {
+                errorMessage = '❌ This subreddit doesn\'t exist or has no posts. Please try another one.';
+            } else if (error.response?.status === 403) {
+                errorMessage = '❌ This subreddit is private or quarantined.';
+            } else if (error.response?.status === 404) {
+                errorMessage = '❌ Subreddit not found.';
+            }
+            
+            await bot.sendMessage(chatId, errorMessage);
         }
     });
 };
