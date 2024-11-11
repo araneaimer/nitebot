@@ -22,10 +22,6 @@ try {
 // Add this after other constants
 const userPreferences = new Map();
 
-// Add these constants at the top with other constants
-const YVAINE_CHAT_ID = process.env.YVAINE_CHAT_ID;
-const ARANE_CHAT_ID = process.env.ARANE_CHAT_ID;
-
 const getMemeFromReddit = async (subreddit = null) => {
     try {
         const targetSubreddit = subreddit || MEME_SUBREDDITS[Math.floor(Math.random() * MEME_SUBREDDITS.length)];
@@ -81,29 +77,14 @@ const getMemeFromReddit = async (subreddit = null) => {
     }
 };
 
-const getCustomInlineKeyboard = (chatId, preferredSubreddit, meme) => {
-    const buttons = [{
-        text: preferredSubreddit 
-            ? `🎲 Another meme from r/${preferredSubreddit}`
-            : '🎲 Another random meme',
-        callback_data: `meme_${preferredSubreddit || 'random'}`
-    }];
-
-    // Add forward button only for Arane and Yvaine
-    if (chatId === YVAINE_CHAT_ID) {
-        buttons.push({
-            text: "Send to Arane ❤️",
-            callback_data: `send_meme_${ARANE_CHAT_ID}_${meme.url}`
-        });
-    } else if (chatId === ARANE_CHAT_ID) {
-        buttons.push({
-            text: "Send to Yvaine ❤️",
-            callback_data: `send_meme_${YVAINE_CHAT_ID}_${meme.url}`
-        });
-    }
-
+const getCustomInlineKeyboard = (chatId, preferredSubreddit) => {
     return {
-        inline_keyboard: [buttons]
+        inline_keyboard: [[{
+            text: preferredSubreddit 
+                ? `🎲 Another meme from r/${preferredSubreddit}`
+                : '🎲 Another random meme',
+            callback_data: `meme_${preferredSubreddit || 'random'}`
+        }]]
     };
 };
 
@@ -157,7 +138,7 @@ const setupMemeCommand = (bot) => {
 
                 await bot.sendPhoto(chatId, meme.url, {
                     caption: caption,
-                    reply_markup: getCustomInlineKeyboard(chatId, preferredSubreddit, meme)
+                    reply_markup: getCustomInlineKeyboard(chatId, preferredSubreddit)
                 });
             } finally {
                 clearInterval(actionInterval);
@@ -196,28 +177,13 @@ const setupMemeCommand = (bot) => {
                 try {
                     const meme = await getMemeFromReddit(subreddit === 'random' ? null : subreddit);
                     
-                    // Calculate padding to align the second column
-                    const firstColumnWidth = Math.max(
-                        `👤 u/${meme.author}`.length,
-                        `🔗 r/${meme.subreddit}`.length
-                    ) + 4; // Add some extra spacing
-
-                    // Create padded strings
-                    const authorLine = `👤 u/${meme.author}`.padEnd(firstColumnWidth);
-                    const subredditLine = `🔗 r/${meme.subreddit}`.padEnd(firstColumnWidth);
-                    
                     const caption = `${meme.title}\n\n` +
-                                  `${authorLine}👍 ${meme.upvotes.toLocaleString()}\n` +
-                                  `${subredditLine}📊 From ${meme.sortMethod}${meme.timeFilter ? '/' + meme.timeFilter : ''}`;
-
-                    // Modified button text
-                    const buttonText = subreddit !== 'random'
-                        ? `🔄 Another meme from r/${subreddit}`
-                        : '🔄 Another random meme';
+                                  `💻 u/${meme.author}\n` +
+                                  `⌨️ r/${meme.subreddit}`;
 
                     await bot.sendPhoto(chatId, meme.url, {
                         caption: caption,
-                        reply_markup: getCustomInlineKeyboard(chatId, subreddit, meme)
+                        reply_markup: getCustomInlineKeyboard(chatId, subreddit === 'random' ? null : subreddit)
                     });
                 } finally {
                     clearInterval(actionInterval);
@@ -235,28 +201,6 @@ const setupMemeCommand = (bot) => {
                 
                 await bot.answerCallbackQuery(query.id, {
                     text: errorMessage,
-                    show_alert: true
-                });
-            }
-        } else if (query.data.startsWith('send_meme_')) {
-            try {
-                const [, , targetChatId] = query.data.split('_');
-                
-                // Forward the message that contains the meme
-                await bot.forwardMessage(
-                    targetChatId,                // Target chat ID
-                    query.message.chat.id,       // Source chat ID
-                    query.message.message_id     // Message ID to forward
-                );
-                
-                await bot.answerCallbackQuery(query.id, {
-                    text: "Meme forwarded successfully! 💝",
-                    show_alert: true
-                });
-            } catch (error) {
-                console.error('Error forwarding meme:', error);
-                await bot.answerCallbackQuery(query.id, {
-                    text: "Failed to forward the meme 😕",
                     show_alert: true
                 });
             }
