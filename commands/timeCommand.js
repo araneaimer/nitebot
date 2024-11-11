@@ -62,7 +62,7 @@ export function setupTimeCommand(bot) {
     }
 
     // Handle time command
-    bot.onText(/\/(time|tm|t)(?:\s+(.+))?/, (msg, match) => {
+    bot.onText(/\/(time|tm)(?:\s+(.+))?/, (msg, match) => {
         const chatId = msg.chat.id;
         let timezone = match[2]?.toLowerCase();
 

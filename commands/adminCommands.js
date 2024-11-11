@@ -98,16 +98,45 @@ export const setupAdminCommands = (bot) => {
 
         // If in maintenance mode, block all non-admin messages
         if (maintenanceMode) {
-            const maintenanceTime = maintenanceStartTime 
-                ? `\nMaintenance started: ${maintenanceStartTime.toLocaleString()}`
-                : '';
-
-            await bot.sendMessage(msg.chat.id, 
-                `🛠 *Bot is currently under maintenance*\n\n` +
-                `We're performing some updates to improve our service.${maintenanceTime}\n\n` +
+            const duration = getTimeDifference(maintenanceStartTime, new Date());
+            const initialMessage = await bot.sendMessage(msg.chat.id, 
+                `🛠 *BOT IS CURRENTLY IN MAINTENANCE MODE*\n\n` +
+                `Started: ${maintenanceStartTime.toLocaleString()}\n` +
+                `Duration: ${duration}\n\n` +
+                `We're performing some updates to improve our service.\n` +
                 `Please try again later!`,
                 { parse_mode: 'Markdown' }
             );
+
+            // Update the timer every second for 5 minutes
+            let updateCount = 0;
+            const timerInterval = setInterval(async () => {
+                try {
+                    const currentDuration = getTimeDifference(maintenanceStartTime, new Date());
+                    await bot.editMessageText(
+                        `🛠 *BOT IS CURRENTLY IN MAINTENANCE MODE*\n\n` +
+                        `Started: ${maintenanceStartTime.toLocaleString()}\n` +
+                        `Duration: ${currentDuration}\n\n` +
+                        `We're performing some updates to improve our service.\n` +
+                        `Please try again later!`,
+                        {
+                            chat_id: msg.chat.id,
+                            message_id: initialMessage.message_id,
+                            parse_mode: 'Markdown'
+                        }
+                    );
+                    
+                    updateCount++;
+                    // Stop after 5 minutes (300 seconds)
+                    if (updateCount >= 300) {
+                        clearInterval(timerInterval);
+                    }
+                } catch (error) {
+                    console.error('Error updating maintenance timer:', error);
+                    clearInterval(timerInterval);
+                }
+            }, 1000); // Update every second
+
             return;
         }
 
@@ -118,13 +147,23 @@ export const setupAdminCommands = (bot) => {
     });
 
     // Enhanced maintenance command
-    bot.onText(/\/maintenance (.+)/, async (msg, match) => {
+    bot.onText(/\/maintenance(?:\s+(.+))?/, async (msg, match) => {
         if (!isAdmin(msg)) {
             return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
         }
 
-        const action = match[1].toLowerCase();
+        const action = match[1]?.toLowerCase();
+
         try {
+            // If no action provided, show status
+            if (!action) {
+                const status = maintenanceMode
+                    ? `🛠 *Maintenance Mode is ACTIVE*\n\nStarted: ${maintenanceStartTime.toLocaleString()}\nDuration: ${getTimeDifference(maintenanceStartTime, new Date())}`
+                    : "✅ *Maintenance Mode is OFF*\n\nBot is operating normally";
+                await bot.sendMessage(msg.chat.id, status, { parse_mode: 'Markdown' });
+                return;
+            }
+
             switch (action) {
                 case 'on':
                 case 'start':
@@ -945,5 +984,10 @@ function getTimeDifference(startDate, endDate) {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-    return `${hours}h ${minutes}m ${seconds}s`;
+    // Pad with zeros for consistent format
+    const paddedHours = hours.toString().padStart(2, '0');
+    const paddedMinutes = minutes.toString().padStart(2, '0');
+    const paddedSeconds = seconds.toString().padStart(2, '0');
+
+    return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
 } 

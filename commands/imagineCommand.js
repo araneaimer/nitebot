@@ -36,7 +36,7 @@ export function setupImageCommand(bot) {
         ]]
     });
 
-    bot.onText(/\/imagine (.+)/, async (msg, match) => {
+    bot.onText(/\/(imagine|im) (.+)/, async (msg, match) => {
         const chatId = msg.chat.id;
         const prompt = match[1];
         
