@@ -10,7 +10,7 @@ import { setupJokeCommand } from './commands/jokeCommand.js';
 import { setupFactCommand } from './commands/factCommand.js';
 import { setupImageCommand } from './commands/imagineCommand.js';
 import { setupAdminCommands } from './commands/adminCommands.js';
-import { setupChatCommand } from './commands/chatCommand.js';
+import { llmService } from './services/llmService.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -20,6 +20,35 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     polling: true,
     request: {
         parseUrl: URLParse
+    }
+});
+
+// Add message handler before command setup
+bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+    const messageText = msg.text;
+
+    // Ignore messages that:
+    // - Start with '/' (commands)
+    // - Are empty or undefined
+    // - Are from a bot
+    // - Are forwarded messages
+    if (!messageText || 
+        messageText.startsWith('/') || 
+        msg.from.is_bot || 
+        msg.forward_date) {
+        return;
+    }
+
+    try {
+        // Show typing indicator
+        await bot.sendChatAction(chatId, 'typing');
+        
+        // Generate and send response
+        const response = await llmService.generateResponse(messageText, chatId);
+        await llmService.sendResponse(bot, chatId, response);
+    } catch (error) {
+        console.error('Error processing message:', error);
     }
 });
 
@@ -50,7 +79,6 @@ setupMemeCommand(bot);
 setupJokeCommand(bot);
 setupFactCommand(bot);
 setupImageCommand(bot);
-setupChatCommand(bot);
 
 // Setup admin commands
 setupAdminCommands(bot);
