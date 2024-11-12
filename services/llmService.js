@@ -24,31 +24,32 @@ class LLMService {
             // Get conversation history
             const history = this.conversationHistory.get(chatId) || [];
             
-            // Add new message to history (keep last 5 messages)
-            history.push({ role: 'user', text: message });
+            // Add new message to history
+            history.push({ role: 'user', parts: [{ text: message }] });
             if (history.length > 10) {
-                history.shift(); // Remove oldest message
+                history.shift();
             }
 
-            // Create chat context
+            // Create chat context with correct format
             const chat = this.model.startChat({
                 history: history.map(msg => ({
-                    role: msg.role,
-                    parts: msg.text
+                    role: msg.role === 'assistant' ? 'model' : msg.role,
+                    parts: msg.parts
                 }))
             });
 
-            const result = await chat.sendMessage(message);
+            // Send message with proper format
+            const result = await chat.sendMessage([{ text: message }]);
             const response = result.response.text();
 
-            // Add response to history
-            history.push({ role: 'assistant', text: response });
+            // Add response to history with 'model' role
+            history.push({ role: 'model', parts: [{ text: response }] });
             this.conversationHistory.set(chatId, history);
 
             return response;
         } catch (error) {
             console.error('Error generating LLM response:', error);
-            throw error;
+            return "I'm having trouble processing your request right now. Please try again in a moment. If the problem persists, contact support.";
         }
     }
 
