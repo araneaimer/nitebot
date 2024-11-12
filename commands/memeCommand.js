@@ -225,13 +225,24 @@ const setupMemeCommand = (bot) => {
                     ? process.env.YVAINE_CHAT_ID 
                     : process.env.ARANE_CHAT_ID;
 
-                // Forward the message
+                // Get the original caption and extract the title (first line)
+                const originalCaption = query.message.caption;
+                const title = originalCaption.split('\n\n')[0];
+
+                // Create new caption with sender info in bold
+                const senderInfo = query.data === 'send_to_yvaine' 
+                    ? '*Meme shared by Arane 💝*'
+                    : '*Meme shared by Yvaine 💝*';
+                const newCaption = `${title}\n\n${senderInfo}`;
+
+                // Forward the message with modified caption and no buttons
                 await bot.copyMessage(
                     targetChatId,
                     query.message.chat.id,
                     query.message.message_id,
                     {
-                        reply_markup: getCustomInlineKeyboard(Number(targetChatId), null)
+                        caption: newCaption,
+                        parse_mode: 'Markdown' // Enable markdown for bold text
                     }
                 );
 
