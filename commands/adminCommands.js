@@ -14,7 +14,7 @@ let lastUserCommand = null; // Stores the last command from monitored user
 const adminCommands = [
     {
         command: '/stats',
-        description: 'Shows bot statistics including total users and last update time',
+        description: 'Shows detailed system and bot statistics including memory usage, uptime, users, and maintenance status',
         usage: 'Just type /stats',
         example: '/stats'
     },
@@ -53,12 +53,6 @@ const adminCommands = [
         description: 'Check bot response time and status',
         usage: 'Just type /ping',
         example: '/ping'
-    },
-    {
-        command: '/debug',
-        description: 'Show system information and bot health',
-        usage: 'Just type /debug',
-        example: '/debug'
     },
     {
         command: '/clear',
