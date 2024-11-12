@@ -220,10 +220,32 @@ const setupMemeCommand = (bot) => {
                 });
             }
         } else if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
-            await bot.answerCallbackQuery(query.id, {
-                text: '✨ Feature coming soon!',
-                show_alert: true
-            });
+            try {
+                const targetChatId = query.data === 'send_to_yvaine' 
+                    ? process.env.YVAINE_CHAT_ID 
+                    : process.env.ARANE_CHAT_ID;
+
+                // Forward the message
+                await bot.copyMessage(
+                    targetChatId,
+                    query.message.chat.id,
+                    query.message.message_id,
+                    {
+                        reply_markup: getCustomInlineKeyboard(Number(targetChatId), null)
+                    }
+                );
+
+                // Send success message to sender
+                await bot.answerCallbackQuery(query.id, {
+                    text: '💝 Meme has been sent!',
+                    show_alert: true
+                });
+            } catch (error) {
+                await bot.answerCallbackQuery(query.id, {
+                    text: '❌ Failed to send the meme. Please try again.',
+                    show_alert: true
+                });
+            }
         }
     });
 };
