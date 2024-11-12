@@ -48,7 +48,7 @@ export function setupImageCommand(bot) {
         ]]
     });
 
-    bot.onText(/\/(imagine|im) (.+)/, async (msg, match) => {
+    bot.onText(/\/(imagine|im|image) (.+)/, async (msg, match) => {
         // const chatId = msg.chat.id;
         // const prompt = match[2];
         

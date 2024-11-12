@@ -1,4 +1,6 @@
 export function setupHelpCommand(bot) {
+    const COMMANDS_PER_PAGE = 4;
+    
     // Define help message constant
     const HELP_MESSAGE = `Hi, My name is Nite
 I am a versatile personal assistant bot currently under development.`;
@@ -6,13 +8,44 @@ I am a versatile personal assistant bot currently under development.`;
     const HELP_KEYBOARD = {
         inline_keyboard: [
             [
-                { text: 'Commands', callback_data: 'help_commands' },
+                { text: 'Commands', callback_data: 'help_commands_1' },
                 { text: 'About', callback_data: 'help_about' }
             ]
         ]
     };
 
     const commands = [
+        {
+            command: '/time, /tm',
+            description: 'Display real-time chronological data',
+            usage: '/time [timezone]',
+            examples: [
+                '/time GMT',
+                '/time UTC+2',
+                '/time America/New_York'
+            ],
+            category: 'Utilities'
+        },
+        {
+            command: '/imagine, /image, /im',
+            description: 'Generate images using AI',
+            usage: '/imagine <prompt>',
+            examples: [
+                '/imagine a sunset over mountains',
+                '/i cyberpunk city at night'
+            ],
+            category: 'AI Generation'
+        },
+        {
+            command: '/currency, /cr',
+            description: 'Real-time currency conversions',
+            usage: '/currency <amount> <from> <to>',
+            examples: [
+                '/currency 100 USD EUR',
+                '/cr 50 EUR JPY'
+            ],
+            category: 'Utilities'
+        },
         {
             command: '/clear',
             description: 'Clear messages in the current chat',
@@ -25,7 +58,33 @@ I am a versatile personal assistant bot currently under development.`;
             category: 'Chat Management',
             note: 'Messages older than 48 hours cannot be deleted due to Telegram limitations.'
         },
-        // ... existing commands ...
+        {
+            command: '/fact, /facts, /ft',
+            description: 'Get interesting facts from various categories',
+            usage: '/fact',
+            examples: ['/fact'],
+            category: 'Entertainment'
+        },
+        {
+            command: '/meme, /mm',
+            description: 'Get random memes from Reddit. You can specify a subreddit or use random for variety',
+            usage: '/meme [subreddit | random]',
+            examples: [
+                '/meme - Get meme from default subreddit',
+                '/meme dankmemes - Get memes from r/dankmemes',
+                '/meme random - Get memes from random subreddits',
+                '/mm programmerhumor - Get memes from r/programmerhumor'
+            ],
+            category: 'Entertainment',
+            note: 'Use /meme list to see available subreddits. Default subreddit: memes'
+        },
+        {
+            command: '/joke, /jk',
+            description: 'Get random jokes',
+            usage: '/joke',
+            examples: ['/joke'],
+            category: 'Entertainment'
+        }
     ];
 
     // Handle /help or /? command
@@ -38,29 +97,77 @@ I am a versatile personal assistant bot currently under development.`;
         });
     });
 
+    // Generate help message for a specific page
+    const generateCommandsHelp = (page) => {
+        const totalPages = Math.ceil(commands.length / COMMANDS_PER_PAGE);
+        const startIdx = (page - 1) * COMMANDS_PER_PAGE;
+        const pageCommands = commands.slice(startIdx, startIdx + COMMANDS_PER_PAGE);
+
+        let message = `📚 *Available Commands* (Page ${page}/${totalPages})\n\n`;
+        
+        pageCommands.forEach(cmd => {
+            message += `*${cmd.command}*\n`;
+            message += `├ ${cmd.description}\n`;
+            message += `├ Usage: ${cmd.usage}\n`;
+            message += `├ Examples:\n`;
+            cmd.examples.forEach(example => {
+                message += `│ • \`${example}\`\n`;
+            });
+            if (cmd.note) {
+                message += `└ Note: _${cmd.note}_\n`;
+            }
+            message += `\n`;
+        });
+
+        message += `_Use the buttons below to navigate_`;
+        return message;
+    };
+
+    // Generate keyboard for navigation
+    const generateNavigationKeyboard = (currentPage) => {
+        const totalPages = Math.ceil(commands.length / COMMANDS_PER_PAGE);
+        const buttons = [];
+
+        if (currentPage > 1) {
+            buttons.push({
+                text: '<< Previous',
+                callback_data: `help_commands_${currentPage - 1}`
+            });
+        }
+
+        if (currentPage < totalPages) {
+            buttons.push({
+                text: 'Next >>',
+                callback_data: `help_commands_${currentPage + 1}`
+            });
+        }
+
+        buttons.push({ text: 'Main Menu', callback_data: 'help_main' });
+
+        return {
+            inline_keyboard: [buttons]
+        };
+    };
+
     // Handle callback queries
-    bot.on('callback_query', (query) => {
+    bot.on('callback_query', async (query) => {
         const chatId = query.message.chat.id;
         const messageId = query.message.message_id;
 
-        switch (query.data) {
-            case 'help_commands':
-                const commandsList = `*Available Commands:*\n\n/time, /tm, /t (timezone) - Display real-time chronological data\n/imagine, /image, /im, /i (prompt) - Generate images using AI\n/currency, /cr (currency conversion) - Real-time currency conversions\n/remind, /rm - Set message reminders`;
-                bot.editMessageText(commandsList, {
-                    chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown',
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: '<< Back', callback_data: 'help_main' }
-                        ]]
-                    }
-                });
-                break;
-
+        if (query.data.startsWith('help_commands_')) {
+            const page = parseInt(query.data.split('_')[2]);
+            const commandsHelp = generateCommandsHelp(page);
+            
+            await bot.editMessageText(commandsHelp, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'Markdown',
+                reply_markup: generateNavigationKeyboard(page)
+            });
+        } else switch (query.data) {
             case 'help_about':
                 const aboutText = `*Nite v1.1*\nA versatile Telegram bot.\nDeveloper: @lordaimer`;
-                bot.editMessageText(aboutText, {
+                await bot.editMessageText(aboutText, {
                     chat_id: chatId,
                     message_id: messageId,
                     parse_mode: 'Markdown',
@@ -73,7 +180,7 @@ I am a versatile personal assistant bot currently under development.`;
                 break;
 
             case 'help_main':
-                bot.editMessageText(HELP_MESSAGE, {
+                await bot.editMessageText(HELP_MESSAGE, {
                     chat_id: chatId,
                     message_id: messageId,
                     parse_mode: 'Markdown',
@@ -81,5 +188,7 @@ I am a versatile personal assistant bot currently under development.`;
                 });
                 break;
         }
+
+        await bot.answerCallbackQuery(query.id);
     });
 }
