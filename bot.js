@@ -10,6 +10,7 @@ import { setupJokeCommand } from './commands/jokeCommand.js';
 import { setupFactCommand } from './commands/factCommand.js';
 import { setupImageCommand } from './commands/imagineCommand.js';
 import { setupAdminCommands } from './commands/adminCommands.js';
+import { setupClearCommand } from './commands/clearCommand.js';
 import { llmService } from './services/llmService.js';
 
 // Initialize environment variables
@@ -134,6 +135,9 @@ setupImageCommand(bot);
 
 // Setup admin commands
 setupAdminCommands(bot);
+
+// Setup clear command
+setupClearCommand(bot);
 
 // Add this function to detect meme intents
 function detectMemeIntent(text) {

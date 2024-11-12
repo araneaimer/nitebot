@@ -12,6 +12,22 @@ I am a versatile personal assistant bot currently under development.`;
         ]
     };
 
+    const commands = [
+        {
+            command: '/clear',
+            description: 'Clear messages in the current chat',
+            usage: '/clear [number | all]',
+            examples: [
+                '/clear 50 - Delete last 50 messages',
+                '/clear all - Delete all messages',
+                '/clear - Delete last 100 messages'
+            ],
+            category: 'Chat Management',
+            note: 'Messages older than 48 hours cannot be deleted due to Telegram limitations.'
+        },
+        // ... existing commands ...
+    ];
+
     // Handle /help or /? command
     bot.onText(/\/(help|\?)/, (msg) => {
         const chatId = msg.chat.id;
