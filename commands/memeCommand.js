@@ -78,13 +78,28 @@ const getMemeFromReddit = async (subreddit = null) => {
 };
 
 const getCustomInlineKeyboard = (chatId, preferredSubreddit) => {
+    const buttons = [{
+        text: preferredSubreddit 
+            ? `🎲 Another meme from r/${preferredSubreddit}`
+            : '🎲 Another random meme',
+        callback_data: `meme_${preferredSubreddit || 'random'}`
+    }];
+
+    // Add send button for specific users
+    if (chatId === Number(process.env.ARANE_CHAT_ID)) {
+        buttons.push({
+            text: 'Send to Yvaine ❤️',
+            callback_data: 'send_to_yvaine'
+        });
+    } else if (chatId === Number(process.env.YVAINE_CHAT_ID)) {
+        buttons.push({
+            text: 'Send to Arane ❤️',
+            callback_data: 'send_to_arane'
+        });
+    }
+
     return {
-        inline_keyboard: [[{
-            text: preferredSubreddit 
-                ? `🎲 Another meme from r/${preferredSubreddit}`
-                : '🎲 Another random meme',
-            callback_data: `meme_${preferredSubreddit || 'random'}`
-        }]]
+        inline_keyboard: [buttons] // Put all buttons in the same row
     };
 };
 
@@ -204,6 +219,11 @@ const setupMemeCommand = (bot) => {
                     show_alert: true
                 });
             }
+        } else if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
+            await bot.answerCallbackQuery(query.id, {
+                text: '✨ Feature coming soon!',
+                show_alert: true
+            });
         }
     });
 };
