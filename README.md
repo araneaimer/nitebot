@@ -79,4 +79,8 @@ This project is licensed under the ISC License.
 
 ## 👤 Author
 
-Created by Aimer
+Hi, My name is Arane Aimer.
+I am a self-taught full-stack developer, entrepreneur working on useful and innovative applications. I started this project as a hobby to learn more about AI and to implement action models in real world applications.
+
+Upcoming Projects:
+- Prism - A privacy first, versatile productivity tool; Notes, Tasks, Calendar, Chat, Project Management and much more combined with the objective to build a personal assistant AI for everyone.
