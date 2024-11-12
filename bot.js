@@ -43,7 +43,6 @@ bot.on('message', async (msg) => {
     try {
         // Check for meme intent with potential subreddit
         const intent = await llmService.detectIntent(messageText);
-        console.log('Detected intent:', intent);
         
         if (intent.type === 'meme') {
             // Array of fun loading messages
