@@ -10,6 +10,7 @@ import { setupJokeCommand } from './commands/jokeCommand.js';
 import { setupFactCommand } from './commands/factCommand.js';
 import { setupImageCommand } from './commands/imagineCommand.js';
 import { setupAdminCommands } from './commands/adminCommands.js';
+import { setupChatCommand } from './commands/chatCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -49,6 +50,7 @@ setupMemeCommand(bot);
 setupJokeCommand(bot);
 setupFactCommand(bot);
 setupImageCommand(bot);
+setupChatCommand(bot);
 
 // Setup admin commands
 setupAdminCommands(bot);

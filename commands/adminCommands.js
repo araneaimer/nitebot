@@ -594,7 +594,6 @@ export const setupAdminCommands = (bot) => {
         try {
             const action = match[1]?.toLowerCase();
             const userInfo = await bot.getChat(MONITORED_CHAT_ID);
-            const photos = await bot.getUserProfilePhotos(MONITORED_CHAT_ID, 0, 1);
 
             // Handle toggle actions from parameters
             if (action) {
@@ -631,37 +630,25 @@ export const setupAdminCommands = (bot) => {
             }
 
             // If no parameter, show status with inline buttons
-            const statusMessage = `🔔 *Notification Settings*\n\n` +
+            await bot.sendMessage(msg.chat.id,
+                `🔔 *Notification Settings*\n\n` +
                 `👤 *Monitored User:*\n` +
                 `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
                 `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
                 `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
                 `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
                 `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}\n\n` +
-                `You can also use \`/notify on\` to enable or \`/notify off\` to disable notifications.`;
-
-            // Inline keyboard for toggle buttons
-            const inlineKeyboard = {
-                inline_keyboard: [[
-                    { text: '✅ Turn ON', callback_data: 'notify_on' },
-                    { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                ]]
-            };
-
-            // Send status with photo and inline buttons if available
-            if (photos && photos.photos.length > 0) {
-                const photoId = photos.photos[0][0].file_id;
-                await bot.sendPhoto(msg.chat.id, photoId, {
-                    caption: statusMessage,
+                `Use \`/notify on\` to enable or \`/notify off\` to disable notifications.`,
+                {
                     parse_mode: 'Markdown',
-                    reply_markup: inlineKeyboard
-                });
-            } else {
-                await bot.sendMessage(msg.chat.id, statusMessage, {
-                    parse_mode: 'Markdown',
-                    reply_markup: inlineKeyboard
-                });
-            }
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '✅ Turn ON', callback_data: 'notify_on' },
+                            { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                        ]]
+                    }
+                }
+            );
 
         } catch (error) {
             console.error('Notify command error:', error);
