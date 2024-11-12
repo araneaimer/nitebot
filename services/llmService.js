@@ -115,6 +115,7 @@ class LLMService {
             const prompt = `
             You are an intent detector for a meme bot. Analyze if this message indicates the user wants to see a meme.
             If they mention a specific subreddit, extract it.
+            If they mention "random" or want any meme, mark as random.
             
             Respond in this format:
             - If user wants a random meme: "meme:random"
@@ -125,6 +126,9 @@ class LLMService {
             "send me a meme" -> "meme:random"
             "get a meme from r/memes" -> "meme:memes"
             "show meme from dankmemes" -> "meme:dankmemes"
+            "send me a random meme" -> "meme:random"
+            "random meme please" -> "meme:random"
+            "any meme" -> "meme:random"
             "how are you" -> "other"
             
             Message: "${message}"
@@ -137,19 +141,22 @@ class LLMService {
                 const [intent, subreddit] = response.split(':');
                 return {
                     type: 'meme',
-                    subreddit: subreddit === 'random' ? null : subreddit
+                    subreddit: subreddit,
+                    isRandom: subreddit === 'random'
                 };
             }
             
             return {
                 type: 'other',
-                subreddit: null
+                subreddit: null,
+                isRandom: false
             };
         } catch (error) {
             console.error('Error detecting intent:', error);
             return {
                 type: 'other',
-                subreddit: null
+                subreddit: null,
+                isRandom: false
             };
         }
     }

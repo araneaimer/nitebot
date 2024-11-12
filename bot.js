@@ -5,7 +5,7 @@ import { setupTimeCommand } from './commands/timeCommand.js';
 import { setupHelpCommand } from './commands/helpCommand.js';
 import { setupStartCommand } from './commands/startCommand.js';
 import { setupCurrencyCommand } from './commands/currencyCommand.js';
-import { setupMemeCommand, getMemeResponse } from './commands/memeCommand.js';
+import { setupMemeCommand, getMemeResponse, userPreferences } from './commands/memeCommand.js';
 import { setupJokeCommand } from './commands/jokeCommand.js';
 import { setupFactCommand } from './commands/factCommand.js';
 import { setupImageCommand } from './commands/imagineCommand.js';
@@ -59,41 +59,35 @@ bot.on('message', async (msg) => {
                 "🎁 Wrapping up something special..."
             ];
             
-            // Select random message
             const loadingMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-            
-            // Send loading message first
             const statusMessage = await bot.sendMessage(chatId, loadingMessage);
             
             try {
                 // Create a fake message object
                 const fakeMsg = {
                     ...msg,
-                    text: intent.subreddit ? `/meme ${intent.subreddit}` : '/meme'
+                    text: intent.isRandom ? '/meme random' : 
+                          intent.subreddit ? `/meme ${intent.subreddit}` : '/meme'
                 };
-                console.log('Created fake message:', fakeMsg.text);
 
-                // Match the regex pattern
                 const match = fakeMsg.text.match(/\/(meme|mm)(?:\s+(\w+))?/);
-                console.log('Regex match:', match);
 
                 if (match) {
-                    if (intent.subreddit) {
-                        // Send confirmation message for subreddit setting
+                    if (intent.isRandom) {
+                        await bot.sendMessage(chatId, '🎲 Setting meme mode to random');
+                        userPreferences.delete(chatId);
+                    } else if (intent.subreddit) {
                         await bot.sendMessage(chatId, `🎯 Setting default subreddit to r/${intent.subreddit}`);
                     }
                     
-                    // Call getMemeResponse directly
-                    await getMemeResponse(bot, chatId, intent.subreddit);
-                    console.log('Meme command executed directly');
+                    await getMemeResponse(bot, chatId, intent.isRandom ? 'random' : intent.subreddit);
                 } else {
                     throw new Error('Invalid command format');
                 }
                 
-                // Delete the loading message after successful meme delivery
                 await bot.deleteMessage(chatId, statusMessage.message_id);
             } catch (error) {
-                console.error('Error details:', error);
+                console.error('Error in meme command:', error);
                 await bot.editMessageText('😅 Oops! The meme escaped. Let\'s try again!', {
                     chat_id: chatId,
                     message_id: statusMessage.message_id

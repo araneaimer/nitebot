@@ -20,7 +20,7 @@ try {
 }
 
 // Add this after other constants
-const userPreferences = new Map();
+export const userPreferences = new Map();
 
 const getMemeFromReddit = async (subreddit = null) => {
     try {
@@ -269,45 +269,37 @@ const setupMemeCommand = (bot) => {
 export { setupMemeCommand };
 
 export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
-    console.log('getMemeResponse called for chatId:', chatId, 'subreddit:', specificSubreddit);
     try {
         await bot.sendChatAction(chatId, 'upload_photo');
-        console.log('Chat action sent successfully');
         
         const actionInterval = setInterval(() => {
             bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
         }, 3000);
         
         try {
-            // Set user preference if specific subreddit is provided
-            if (specificSubreddit) {
-                console.log('Setting user preference for subreddit:', specificSubreddit);
+            if (specificSubreddit === 'random') {
+                userPreferences.delete(chatId);
+                specificSubreddit = null;
+            } else if (specificSubreddit) {
                 userPreferences.set(chatId, specificSubreddit);
             }
 
-            console.log('Attempting to fetch meme...');
-            // Use the specific subreddit or user preference
             const targetSubreddit = specificSubreddit || userPreferences.get(chatId);
-            console.log('Target subreddit:', targetSubreddit);
-            
             const meme = await getMemeFromReddit(targetSubreddit);
-            console.log('Meme fetched from:', meme.subreddit);
             
             const caption = `${meme.title}\n\n` +
                           `💻 u/${meme.author}\n` +
                           `⌨️ r/${meme.subreddit}`;
 
-            // Send photo only once
             await bot.sendPhoto(chatId, meme.url, {
                 caption: caption,
                 reply_markup: getCustomInlineKeyboard(chatId, targetSubreddit)
             });
-            console.log('Photo sent successfully');
         } finally {
             clearInterval(actionInterval);
         }
     } catch (error) {
-        console.error('Detailed error in getMemeResponse:', error);
+        console.error('Error in getMemeResponse:', error);
         await bot.sendMessage(chatId, '❌ Sorry, I couldn\'t fetch a meme right now.');
     }
 }
