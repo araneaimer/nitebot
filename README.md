@@ -1,38 +1,82 @@
-<h1 align="center">Niite Bot Development Task List</h1>
+<h1 align="center">Niite Bot</h1>
 
-- [x] /start - Initializes the bot and displays a welcome message
+<p align="center">
+  A versatile Telegram bot powered by AI for image generation, information retrieval, and entertainment
+</p>
 
-- [x] /help, /? - Displays a dynamic help message with inline navigation buttons. <br> <ul> <li> Page 1: Short Description </li> <li> Page 2: List of all available commands </li> </ul>
+## 🌟 Overview
 
-- [x] /time, /tm - Takes the name of a timezone as a value and displays a dynamic message that updates with real-time chrono data.
+Niite Bot is a feature-rich Telegram bot that combines AI capabilities with utility functions to provide a seamless user experience. Built with Node.js and modern APIs, it offers everything from AI image generation to real-time information services.
 
-- [ ] /imagine, /image, /im, /i - Generates an image using Huggging face models, Also, takes in the optional parameter of the name of that image model
+## ✨ Features
 
-- [ ] /huggingface, /hf - Specify the name of a hugging face model and a prompt to generate an image
+### AI & Image Generation
+- Image generation using multiple Hugging Face models
+- Smart model selection for different art styles
+- Image regeneration and customization options
 
-- [ ] /currency, /cr - real time currency conversions
+### Information Services
+- Real-time timezone information
+- Currency conversion
+- Random facts with relevant images
+- Joke generation
+- Reddit meme integration
 
-- [ ] /remind, /rm - sets a reminder and sends a message at the set time. 
+### Admin Features
+- Maintenance mode management
+- User activity monitoring
+- Broadcasting capabilities
+- System statistics and analytics
+- Command usage tracking
 
-- [ ] /translate, /tr, /t - translates text from one language to another
+## 🛠 Technical Stack
 
-## Subscriptions Available Commands
+- **Runtime**: Node.js
+- **Main Dependencies**:
+  - node-telegram-bot-api
+  - @huggingface/inference
+  - @google/generative-ai
+  - moment-timezone
+  - natural (NLP)
+  - dotenv
 
-- [x] /jokes, /jk - sends a random joke
+## 🚀 Getting Started
 
-- [x] /meme, /mm - sends a random meme from Reddit
+1. Clone the repository
+2. Install dependencies:
+```bash
+npm install
+```
+3. Create a `.env` file with required credentials:
+```env
+TELEGRAM_BOT_TOKEN=your_token
+HUGGING_FACE_TOKEN=your_token
+GOOGLE_AI_API_KEY=your_key
+ADMIN_USER_ID=your_admin_id
+```
+4. Start the bot:
+```bash
+node bot.js
+```
 
-- [x] /fact, /ft - sends a random fact
+## 📝 Environment Variables
 
-- [ ] /news, /nw - sends the latest 10 news headlines from a specified country
+- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+- `HUGGING_FACE_TOKEN`: Hugging Face API token
+- `GOOGLE_AI_API_KEY`: Google AI API key
+- `ADMIN_USER_ID`: Telegram user ID for admin access
+- `UNSPLASH_ACCESS_KEY`: Unsplash API key (optional)
+- `PIXABAY_API_KEY`: Pixabay API key (optional)
+- `NINJA_API_KEY`: API Ninjas key (optional)
 
-- [ ] /subscribe, /sub - subscribes to any of the above commands which will send a message to the user at a set time every day
+## 👥 Contributing
 
-- [ ] /unsubscribe, /unsub - unsubscribes from any of the above commands
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-- [ ] /ytdl, /yt - downloads a youtube video and sends it to the user
+## 📄 License
 
+This project is licensed under the ISC License.
 
-Only available to the bot owner & admins
+## 👤 Author
 
-- [ ] /prompt, /pr - generate a prompt for image generation with options for choosing art style, aspect ratio
+Created by Aimer

@@ -11,6 +11,18 @@ const MODELS = {
     'Anime Style': 'alvdansen/softserve_anime'
 };
 
+const generateImage = async (modelId, prompt) => {
+    // Add timestamp and random seed to prompt to force unique generation
+    const timestamp = Date.now();
+    const randomSeed = Math.floor(Math.random() * 2147483647);
+    const randomizedPrompt = `${prompt} [t:${timestamp}] [s:${randomSeed}]`;
+    
+    return await hf.textToImage({
+        model: modelId,
+        inputs: randomizedPrompt
+    });
+};
+
 export function setupImageCommand(bot) {
     const userSessions = new Map();
 
@@ -37,8 +49,10 @@ export function setupImageCommand(bot) {
     });
 
     bot.onText(/\/(imagine|im) (.+)/, async (msg, match) => {
-        const chatId = msg.chat.id;
-        const prompt = match[1];
+        // const chatId = msg.chat.id;
+        // const prompt = match[2];
+        
+        console.log(`Received imagine command with prompt: "${prompt}"`);
         
         userSessions.set(chatId, {
             prompt,
@@ -102,6 +116,10 @@ export function setupImageCommand(bot) {
             const modelId = MODELS[modelName];
             const session = userSessions.get(chatId);
 
+            console.log(`Starting generation with model ${modelName}`);
+            console.log(`Using prompt: "${session?.prompt}"`);
+            console.log(`Model ID: ${modelId}`);
+
             if (!session) {
                 await bot.answerCallbackQuery(query.id, {
                     text: '❌ Session expired. Please start over with /imagine command.',
@@ -121,12 +139,8 @@ export function setupImageCommand(bot) {
 
             try {
                 console.log(`Starting generation with ${modelName}...`);
-                const response = await hf.textToImage({
-                    model: modelId,
-                    inputs: session.prompt,
-                });
-                console.log(`${modelName}: 200 DONE`);
-
+                const response = await generateImage(modelId, session.prompt);
+                
                 const buffer = Buffer.from(await response.arrayBuffer());
 
                 // Send image with regenerate and upscale buttons
