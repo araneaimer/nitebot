@@ -5,7 +5,7 @@ const userSet = new Set();
 // Track active chat IDs (you might want to persist this in a database later)
 const activeChatIds = new Set();
 
-let notifyEnabled = true;
+let notifyEnabled = false;
 const MONITORED_CHAT_ID = '5245253271';
 
 const commandUsageStats = new Map(); // Tracks command usage frequency
@@ -20,27 +20,9 @@ const adminCommands = [
     },
     {
         command: '/broadcast',
-        description: 'Sends a message to all bot users',
-        usage: '/broadcast <message>',
-        example: '/broadcast Hello everyone! Bot maintenance in 1 hour.'
-    },
-    {
-        command: '/previewbroadcast',
-        description: 'Preview how your broadcast message will look',
-        usage: '/previewbroadcast <message>',
-        example: '/previewbroadcast *Important Update*: New features!'
-    },
-    {
-        command: '/broadcastinfo',
-        description: 'Shows information about potential broadcast recipients',
-        usage: 'Just type /broadcastinfo',
-        example: '/broadcastinfo'
-    },
-    {
-        command: '/maintenance',
-        description: 'Controls bot maintenance mode',
-        usage: '/maintenance <stop|start>',
-        example: '/maintenance stop'
+        description: 'Sends a message to all bot users. Use flags for different options',
+        usage: '/broadcast [-p|-prw|-i|-info] <message>',
+        example: '/broadcast Hello everyone!\n/broadcast -p Important update!\n/broadcast -info'
     },
     {
         command: '/clearstats',
@@ -63,8 +45,8 @@ const adminCommands = [
     {
         command: '/notify',
         description: 'Toggle notifications for specific user activity',
-        usage: 'Just type /notify',
-        example: '/notify'
+        usage: '/notify [on|off]',
+        example: '/notify on\n/notify off\n/notify'
     },
     {
         command: '/overview',
@@ -77,7 +59,7 @@ const adminCommands = [
 const COMMANDS_PER_PAGE = 4;
 
 export const setupAdminCommands = (bot) => {
-    const ADMIN_USER_ID = process.env.ADMIN_USER_ID; // Add this to your .env file
+    const ADMIN_USER_ID = process.env.ADMIN_USER_ID;
 
     // Middleware to check if user is admin
     const isAdmin = (msg) => {
@@ -85,66 +67,35 @@ export const setupAdminCommands = (bot) => {
         return userId === ADMIN_USER_ID;
     };
 
-    // Middleware to check maintenance mode
-    bot.on('message', async (msg) => {
-        // Always allow admin
-        if (isAdmin(msg)) return;
-
-        // If in maintenance mode, block all non-admin messages
-        if (maintenanceMode) {
-            const duration = getTimeDifference(maintenanceStartTime, new Date());
-            const initialMessage = await bot.sendMessage(msg.chat.id, 
-                `🛠 *BOT IS CURRENTLY IN MAINTENANCE MODE*\n\n` +
-                `Started: ${maintenanceStartTime.toLocaleString()}\n` +
-                `Duration: ${duration}\n\n` +
-                `We're performing some updates to improve our service.\n` +
-                `Please try again later!`,
-                { parse_mode: 'Markdown' }
-            );
-
-            // Update the timer every second for 5 minutes
-            let updateCount = 0;
-            const timerInterval = setInterval(async () => {
-                try {
-                    const currentDuration = getTimeDifference(maintenanceStartTime, new Date());
-                    await bot.editMessageText(
-                        `🛠 *BOT IS CURRENTLY IN MAINTENANCE MODE*\n\n` +
-                        `Started: ${maintenanceStartTime.toLocaleString()}\n` +
-                        `Duration: ${currentDuration}\n\n` +
-                        `We're performing some updates to improve our service.\n` +
-                        `Please try again later!`,
-                        {
-                            chat_id: msg.chat.id,
-                            message_id: initialMessage.message_id,
-                            parse_mode: 'Markdown'
-                        }
-                    );
-                    
-                    updateCount++;
-                    // Stop after 5 minutes (300 seconds)
-                    if (updateCount >= 300) {
-                        clearInterval(timerInterval);
-                    }
-                } catch (error) {
-                    console.error('Error updating maintenance timer:', error);
-                    clearInterval(timerInterval);
-                }
-            }, 1000); // Update every second
-
-            return;
-        }
-
-        // Track user if not in maintenance mode
-        if (msg.from.id) {
-            userSet.add(msg.from.id.toString());
-        }
-    });
-
-    // Enhanced maintenance command
-    bot.onText(/\/maintenance(?:\s+(.+))?/, async (msg, match) => {
+    // Helper function for non-admin handling
+    const handleNonAdmin = async (bot, msg) => {
         if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
+            try {
+                await bot.answerCallbackQuery(msg.id, {
+                    text: "⛔ This command requires administrator privileges",
+                    show_alert: false,
+                    cache_time: 3
+                });
+            } catch (error) {
+                const tempMessage = await bot.sendMessage(msg.chat.id, 
+                    "⛔ This command requires administrator privileges");
+                
+                setTimeout(async () => {
+                    try {
+                        await bot.deleteMessage(msg.chat.id, tempMessage.message_id);
+                    } catch (error) {
+                        console.error('Error deleting temporary message:', error);
+                    }
+                }, 3000);
+            }
+            return true;
         }
+        return false;
+    };
+
+    // Move all command handlers inside setupAdminCommands
+    bot.onText(/\/maintenance(?:\s+(.+))?/, async (msg, match) => {
+        if (await handleNonAdmin(bot, msg)) return;
 
         const action = match[1]?.toLowerCase();
 
@@ -211,11 +162,8 @@ export const setupAdminCommands = (bot) => {
         }
     });
 
-    // Enhanced stats command with all information
     bot.onText(/\/stats/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+        if (await handleNonAdmin(bot, msg)) return;
         
         try {
             // Send initial stats page
@@ -250,9 +198,7 @@ export const setupAdminCommands = (bot) => {
 
     // Clear stats command (admin only)
     bot.onText(/\/clearstats/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+        if (await handleNonAdmin(bot, msg)) return;
 
         try {
             userSet.clear();
@@ -264,96 +210,112 @@ export const setupAdminCommands = (bot) => {
     });
 
     // Broadcast command with status reporting
-    bot.onText(/\/broadcast (.+)/, async (msg, match) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+    bot.onText(/\/broadcast(?:\s+(-[a-zA-Z]+))?\s*(.*)/, async (msg, match) => {
+        if (await handleNonAdmin(bot, msg)) return;
 
-        const broadcastMessage = match[1];
-        const successfulSends = [];
-        const failedSends = [];
+        const flag = match[1]?.toLowerCase() || '';
+        const message = match[2]?.trim();
 
-        // Send initial status message
-        const statusMsg = await bot.sendMessage(
-            msg.chat.id,
-            "🚀 Starting broadcast...\n\nMessage:\n" + broadcastMessage
-        );
-
-        // Broadcast to all active chats
-        for (const chatId of activeChatIds) {
-            try {
-                await bot.sendMessage(chatId, 
-                    `📢 *Broadcast Message*\n\n${broadcastMessage}`, 
+        try {
+            // Handle broadcast info flag
+            if (flag === '-i' || flag === '-info') {
+                await bot.sendMessage(
+                    msg.chat.id,
+                    `📊 *Broadcast Information*\n\n` +
+                    `Total potential recipients: ${activeChatIds.size}\n\n` +
+                    `Use \`/broadcast -p <message>\` to preview\n` +
+                    `Use \`/broadcast <message>\` to send to all users`,
                     { parse_mode: 'Markdown' }
                 );
-                successfulSends.push(chatId);
-            } catch (error) {
-                console.error(`Failed to send to ${chatId}:`, error);
-                failedSends.push(chatId);
-                
-                // Remove inactive chats
-                if (error.response?.statusCode === 403) {
-                    activeChatIds.delete(chatId);
+                return;
+            }
+
+            // Handle preview flag
+            if (flag === '-p' || flag === '-prw') {
+                if (!message) {
+                    return bot.sendMessage(msg.chat.id, 
+                        "❌ Please provide a message to preview.\n" +
+                        "Example: `/broadcast -p Hello everyone!`",
+                        { parse_mode: 'Markdown' }
+                    );
+                }
+                await bot.sendMessage(
+                    msg.chat.id,
+                    `📢 *Preview of Broadcast Message*\n\n${message}`,
+                    { parse_mode: 'Markdown' }
+                );
+                return;
+            }
+
+            // Handle actual broadcast
+            if (!message) {
+                return bot.sendMessage(msg.chat.id, 
+                    "❌ Please provide a message to broadcast.\n" +
+                    "Example: `/broadcast Hello everyone!`\n\n" +
+                    "Available flags:\n" +
+                    "• `-p` or `-prw`: Preview message\n" +
+                    "• `-i` or `-info`: Show broadcast information",
+                    { parse_mode: 'Markdown' }
+                );
+            }
+
+            // Original broadcast logic
+            const successfulSends = [];
+            const failedSends = [];
+
+            // Send initial status message
+            const statusMsg = await bot.sendMessage(
+                msg.chat.id,
+                "🚀 Starting broadcast...\n\nMessage:\n" + message
+            );
+
+            // Broadcast to all active chats
+            for (const chatId of activeChatIds) {
+                try {
+                    await bot.sendMessage(chatId, 
+                        `📢 *Broadcast Message*\n\n${message}`, 
+                        { parse_mode: 'Markdown' }
+                    );
+                    successfulSends.push(chatId);
+                } catch (error) {
+                    console.error(`Failed to send to ${chatId}:`, error);
+                    failedSends.push(chatId);
+                    
+                    // Remove inactive chats
+                    if (error.response?.statusCode === 403) {
+                        activeChatIds.delete(chatId);
+                    }
+                }
+
+                // Update status every 5 sends
+                if ((successfulSends.length + failedSends.length) % 5 === 0) {
+                    await updateBroadcastStatus(bot, statusMsg.chat.id, statusMsg.message_id, 
+                        successfulSends.length, failedSends.length);
                 }
             }
 
-            // Update status every 5 sends
-            if ((successfulSends.length + failedSends.length) % 5 === 0) {
-                await updateBroadcastStatus(bot, statusMsg.chat.id, statusMsg.message_id, 
-                    successfulSends.length, failedSends.length);
-            }
+            // Send final status
+            await bot.editMessageText(
+                `📊 *Broadcast Complete*\n\n` +
+                `✅ Successfully sent: ${successfulSends.length}\n` +
+                `❌ Failed: ${failedSends.length}\n` +
+                `📝 Message:\n${message}`,
+                {
+                    chat_id: statusMsg.chat.id,
+                    message_id: statusMsg.message_id,
+                    parse_mode: 'Markdown'
+                }
+            );
+
+        } catch (error) {
+            console.error('Broadcast command error:', error);
+            await bot.sendMessage(msg.chat.id, "❌ Error broadcasting message.");
         }
-
-        // Send final status
-        await bot.editMessageText(
-            `📊 *Broadcast Complete*\n\n` +
-            `✅ Successfully sent: ${successfulSends.length}\n` +
-            `❌ Failed: ${failedSends.length}\n` +
-            `📝 Message:\n${broadcastMessage}`,
-            {
-                chat_id: statusMsg.chat.id,
-                message_id: statusMsg.message_id,
-                parse_mode: 'Markdown'
-            }
-        );
-    });
-
-    // Preview broadcast command
-    bot.onText(/\/previewbroadcast (.+)/, async (msg, match) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
-
-        const broadcastMessage = match[1];
-        
-        await bot.sendMessage(
-            msg.chat.id,
-            `📢 *Preview of Broadcast Message*\n\n${broadcastMessage}`,
-            { parse_mode: 'Markdown' }
-        );
-    });
-
-    // Get broadcast audience size
-    bot.onText(/\/broadcastinfo/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
-
-        await bot.sendMessage(
-            msg.chat.id,
-            `📊 *Broadcast Information*\n\n` +
-            `Total potential recipients: ${activeChatIds.size}\n\n` +
-            `Use /previewbroadcast <message> to test your message\n` +
-            `Use /broadcast <message> to send to all users`,
-            { parse_mode: 'Markdown' }
-        );
     });
 
     // Admin help command
     bot.onText(/\/admin/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+        if (await handleNonAdmin(bot, msg)) return;
 
         try {
             const message = generateHelpMessage(1);
@@ -371,130 +333,64 @@ export const setupAdminCommands = (bot) => {
         }
     });
 
-    // Handle callback queries for pagination
+    // Handle callback queries for admin actions only
     bot.on('callback_query', async (query) => {
-        // Only check admin status for admin-specific actions
-        if (query.data.startsWith('admin_help_') || query.data.startsWith('notify_')) {
+        if (query.data.startsWith('admin_help_') || 
+            query.data.startsWith('notify_') || 
+            query.data.startsWith('stats_')) {
+            
             if (!isAdmin({ from: query.from })) {
-                return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
+                return; // Silently ignore non-admin attempts
             }
-        }
-
-        // Handle admin-specific actions
-        if (query.data.startsWith('notify_')) {
-            const action = query.data.split('_')[1];
             
             try {
-                // Get user profile information
-                const userInfo = await bot.getChat(MONITORED_CHAT_ID);
-                
-                switch (action) {
-                    case 'on':
-                        notifyEnabled = true;
-                        await bot.editMessageText(
-                            `🔔 *Notification Settings*\n\n` +
-                            `👤 *Monitored User:*\n` +
-                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                            `Status: ✅ Notifications ENABLED`,
-                            {
-                                chat_id: query.message.chat.id,
-                                message_id: query.message.message_id,
-                                parse_mode: 'Markdown',
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
-                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                                    ]]
+                if (query.data.startsWith('notify_')) {
+                    const action = query.data.split('_')[1];
+                    switch (action) {
+                        case 'on':
+                            notifyEnabled = true;
+                            await bot.editMessageText(
+                                `🔔 *Notification Settings*\n\n` +
+                                `✅ Notifications have been *ENABLED*\n\n` +
+                                `You will now receive notifications for user activity.`,
+                                {
+                                    chat_id: query.message.chat.id,
+                                    message_id: query.message.message_id,
+                                    parse_mode: 'Markdown'
                                 }
-                            }
-                        );
-                        break;
-
-                    case 'off':
-                        notifyEnabled = false;
-                        await bot.editMessageText(
-                            `🔔 *Notification Settings*\n\n` +
-                            `👤 *Monitored User:*\n` +
-                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                            `Status: ❌ Notifications DISABLED`,
-                            {
-                                chat_id: query.message.chat.id,
-                                message_id: query.message.message_id,
-                                parse_mode: 'Markdown',
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
-                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                                    ]]
+                            );
+                            break;
+                        case 'off':
+                            notifyEnabled = false;
+                            await bot.editMessageText(
+                                `🔔 *Notification Settings*\n\n` +
+                                `❌ Notifications have been *DISABLED*\n\n` +
+                                `You will no longer receive notifications for user activity.`,
+                                {
+                                    chat_id: query.message.chat.id,
+                                    message_id: query.message.message_id,
+                                    parse_mode: 'Markdown'
                                 }
-                            }
-                        );
-                        break;
-                }
-                await bot.answerCallbackQuery(query.id);
-            } catch (error) {
-                console.error('Notify button error:', error);
-                await bot.answerCallbackQuery(query.id, "❌ Error updating notification settings");
-            }
-        } else if (query.data.startsWith('admin_help_')) {
-            const page = parseInt(query.data.split('_')[2]);
-            
-            try {
-                const message = generateHelpMessage(page);
-                await bot.editMessageText(message, {
-                    chat_id: query.message.chat.id,
-                    message_id: query.message.message_id,
-                    parse_mode: 'Markdown',
-                    ...generateKeyboard(page)
-                });
-                await bot.answerCallbackQuery(query.id);
-            } catch (error) {
-                console.error('Admin help pagination error:', error);
-                await bot.answerCallbackQuery(query.id, "❌ Error updating help message.");
-            }
-        }
-
-        // Handle non-admin actions (like meme sharing) without admin check
-        if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
-            // ... existing meme sharing code ...
-        }
-
-        // Add this to your callback query handler
-        if (query.data.startsWith('stats_')) {
-            if (!isAdmin({ from: query.from })) {
-                return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
-            }
-            
-            const page = parseInt(query.data.split('_')[1]);
-            try {
-                const message = await generateStatsMessage(page);
-                await bot.editMessageText(message, {
-                    chat_id: query.message.chat.id,
-                    message_id: query.message.message_id,
-                    parse_mode: 'Markdown',
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: 'System Info', callback_data: 'stats_1' },
-                            { text: 'Bot Stats', callback_data: 'stats_2' }
-                        ]]
+                            );
+                            break;
                     }
-                });
-                await bot.answerCallbackQuery(query.id);
+                } else if (query.data.startsWith('admin_help_')) {
+                    const page = parseInt(query.data.split('_')[2]);
+                    // ... admin help pagination code ...
+                } else if (query.data.startsWith('stats_')) {
+                    const page = parseInt(query.data.split('_')[1]);
+                    // ... stats pagination code ...
+                }
+                await bot.answerCallbackQuery(query.id); // Silent acknowledgment
             } catch (error) {
-                console.error('Stats pagination error:', error);
-                await bot.answerCallbackQuery(query.id, "❌ Error updating statistics.");
+                console.error('Admin callback error:', error);
+                await bot.answerCallbackQuery(query.id); // Still silent
             }
         }
     });
 
     bot.onText(/\/ping/, async (msg) => {
-        if (!isAdmin(msg)) return;
+        if (await handleNonAdmin(bot, msg)) return;
         
         const start = Date.now();
         const message = await bot.sendMessage(msg.chat.id, "🏓 Pinging...");
@@ -513,7 +409,7 @@ export const setupAdminCommands = (bot) => {
     });
 
     bot.onText(/\/poll (.+)/, async (msg, match) => {
-        if (!isAdmin(msg)) return;
+        if (await handleNonAdmin(bot, msg)) return;
         
         const parts = match[1].split('|').map(part => part.trim());
         const question = parts[0];
@@ -537,9 +433,7 @@ export const setupAdminCommands = (bot) => {
     });
 
     bot.onText(/\/clear(?:\s+(\S+))?/, async (msg, match) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+        if (await handleNonAdmin(bot, msg)) return;
 
         const param = match[1]?.toLowerCase();
 
@@ -577,7 +471,7 @@ export const setupAdminCommands = (bot) => {
                         const finalMessage = await bot.sendMessage(
                             msg.chat.id,
                             `🧹 *Complete Cleanup*\n\n` +
-                            `✅ Deleted ${deletedCount} messages\n\n` +
+                            ` Deleted ${deletedCount} messages\n\n` +
                             `_This message will self-destruct in 30 seconds..._`,
                             { parse_mode: 'Markdown' }
                         );
@@ -694,148 +588,85 @@ export const setupAdminCommands = (bot) => {
         }
     });
 
-    bot.onText(/\/notify/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+    bot.onText(/\/notify(?:\s+(\w+))?/, async (msg, match) => {
+        if (await handleNonAdmin(bot, msg)) return;
 
         try {
-            // Get user profile information
+            const action = match[1]?.toLowerCase();
             const userInfo = await bot.getChat(MONITORED_CHAT_ID);
-            
-            // Get user's profile photos
             const photos = await bot.getUserProfilePhotos(MONITORED_CHAT_ID, 0, 1);
-            
-            // First send user info with photo if available
-            if (photos && photos.photos.length > 0) {
-                const photoId = photos.photos[0][0].file_id;
-                await bot.sendPhoto(msg.chat.id, photoId, {
-                    caption: `🔔 *Notification Settings*\n\n` +
-                        `👤 *Monitored User:*\n` +
-                        `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                        `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                        `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                        `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                        `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}`,
-                    parse_mode: 'Markdown',
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: '✅ Turn ON', callback_data: 'notify_on' },
-                            { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                        ]]
-                    }
-                });
-            } else {
-                // Send without photo if no profile picture is available
-                await bot.sendMessage(
-                    msg.chat.id,
-                    `🔔 *Notification Settings*\n\n` +
-                    `👤 *Monitored User:*\n` +
-                    `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                    `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                    `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                    `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                    `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}`,
-                    {
-                        parse_mode: 'Markdown',
-                        reply_markup: {
-                            inline_keyboard: [[
-                                { text: '✅ Turn ON', callback_data: 'notify_on' },
-                                { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                            ]]
-                        }
-                    }
-                );
-            }
-        } catch (error) {
-            console.error('Notify command error:', error);
-            await bot.sendMessage(msg.chat.id, 
-                "❌ Error fetching user information or managing notifications.");
-        }
-    });
 
-    bot.on('callback_query', async (query) => {
-        if (!isAdmin({ from: query.from })) {
-            return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
-        }
-
-        if (query.data.startsWith('notify_')) {
-            const action = query.data.split('_')[1];
-            
-            try {
-                // Get user profile information
-                const userInfo = await bot.getChat(MONITORED_CHAT_ID);
-                
+            // Handle toggle actions from parameters
+            if (action) {
                 switch (action) {
                     case 'on':
                         notifyEnabled = true;
-                        await bot.editMessageText(
-                            `🔔 *Notification Settings*\n\n` +
-                            `👤 *Monitored User:*\n` +
-                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                            `Status: ✅ Notifications ENABLED`,
-                            {
-                                chat_id: query.message.chat.id,
-                                message_id: query.message.message_id,
-                                parse_mode: 'Markdown',
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
-                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                                    ]]
-                                }
-                            }
+                        await bot.sendMessage(msg.chat.id, 
+                            `✅ Notifications have been *ENABLED*\n\n` +
+                            `You will now receive notifications for user activity.`,
+                            { parse_mode: 'Markdown' }
                         );
-                        break;
+                        return;
 
                     case 'off':
                         notifyEnabled = false;
-                        await bot.editMessageText(
-                            `🔔 *Notification Settings*\n\n` +
-                            `👤 *Monitored User:*\n` +
-                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
-                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
-                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
-                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
-                            `Status: ❌ Notifications DISABLED`,
-                            {
-                                chat_id: query.message.chat.id,
-                                message_id: query.message.message_id,
-                                parse_mode: 'Markdown',
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
-                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
-                                    ]]
-                                }
-                            }
+                        await bot.sendMessage(msg.chat.id, 
+                            `❌ Notifications have been *DISABLED*\n\n` +
+                            `You will no longer receive notifications for user activity.`,
+                            { parse_mode: 'Markdown' }
                         );
-                        break;
+                        return;
+
+                    default:
+                        await bot.sendMessage(msg.chat.id,
+                            `❌ Invalid parameter.\n\n` +
+                            `Usage:\n` +
+                            `• \`/notify on\` - Enable notifications\n` +
+                            `• \`/notify off\` - Disable notifications\n` +
+                            `• \`/notify\` - Check current status`,
+                            { parse_mode: 'Markdown' }
+                        );
+                        return;
                 }
-                await bot.answerCallbackQuery(query.id);
-            } catch (error) {
-                console.error('Notify button error:', error);
-                await bot.answerCallbackQuery(query.id, "❌ Error updating notification settings");
             }
-        } else if (query.data.startsWith('admin_help_')) {
-            const page = parseInt(query.data.split('_')[2]);
-            
-            try {
-                const message = generateHelpMessage(page);
-                await bot.editMessageText(message, {
-                    chat_id: query.message.chat.id,
-                    message_id: query.message.message_id,
+
+            // If no parameter, show status with inline buttons
+            const statusMessage = `🔔 *Notification Settings*\n\n` +
+                `👤 *Monitored User:*\n` +
+                `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                `Current Status: ${notifyEnabled ? '✅ ON' : '❌ OFF'}\n\n` +
+                `You can also use \`/notify on\` to enable or \`/notify off\` to disable notifications.`;
+
+            // Inline keyboard for toggle buttons
+            const inlineKeyboard = {
+                inline_keyboard: [[
+                    { text: '✅ Turn ON', callback_data: 'notify_on' },
+                    { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                ]]
+            };
+
+            // Send status with photo and inline buttons if available
+            if (photos && photos.photos.length > 0) {
+                const photoId = photos.photos[0][0].file_id;
+                await bot.sendPhoto(msg.chat.id, photoId, {
+                    caption: statusMessage,
                     parse_mode: 'Markdown',
-                    ...generateKeyboard(page)
+                    reply_markup: inlineKeyboard
                 });
-                await bot.answerCallbackQuery(query.id);
-            } catch (error) {
-                console.error('Admin help pagination error:', error);
-                await bot.answerCallbackQuery(query.id, "❌ Error updating help message.");
+            } else {
+                await bot.sendMessage(msg.chat.id, statusMessage, {
+                    parse_mode: 'Markdown',
+                    reply_markup: inlineKeyboard
+                });
             }
+
+        } catch (error) {
+            console.error('Notify command error:', error);
+            await bot.sendMessage(msg.chat.id, 
+                "❌ Error managing notifications.");
         }
     });
 
@@ -916,9 +747,7 @@ export const setupAdminCommands = (bot) => {
     });
 
     bot.onText(/\/overview/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
+        if (await handleNonAdmin(bot, msg)) return;
 
         try {
             // Get user profile information
@@ -1089,4 +918,4 @@ async function generateStatsMessage(page) {
             `• Notifications: ${notifyEnabled ? 'ON 🔔' : 'OFF 🔕'}\n\n` +
             `_Last Updated: ${new Date().toLocaleString()}_`;
     }
-} 
+}
