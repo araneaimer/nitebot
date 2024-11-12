@@ -84,18 +84,47 @@ class LLMService {
 
     async sendResponse(bot, chatId, response) {
         try {
+            // First attempt: Try sending with Markdown
             if (response.length <= 4096) {
-                await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+                try {
+                    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+                } catch (markdownError) {
+                    // If Markdown fails, send without parsing
+                    await bot.sendMessage(chatId, response);
+                }
             } else {
                 // Split long responses
                 for (let i = 0; i < response.length; i += 4096) {
                     const chunk = response.substring(i, Math.min(response.length, i + 4096));
-                    await bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+                    try {
+                        await bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+                    } catch (markdownError) {
+                        // If Markdown fails, send without parsing
+                        await bot.sendMessage(chatId, chunk);
+                    }
                 }
             }
         } catch (error) {
             console.error('Error sending response:', error);
             await bot.sendMessage(chatId, '❌ Sorry, I encountered an error while processing your request.');
+        }
+    }
+
+    async detectIntent(message) {
+        try {
+            const prompt = `
+            You are an intent detector. Analyze if this message indicates the user wants to see a meme.
+            Respond only with "meme" if the user wants a meme, or "other" for any other intent.
+            Message: "${message}"
+            `;
+
+            const result = await this.model.generateContent(prompt);
+            const response = result.response.text().toLowerCase().trim();
+            
+            return response === 'meme' ? 'meme' : 'other';
+        } catch (error) {
+            console.error('Error detecting intent:', error);
+            return 'other';
         }
     }
 }

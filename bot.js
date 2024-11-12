@@ -5,7 +5,7 @@ import { setupTimeCommand } from './commands/timeCommand.js';
 import { setupHelpCommand } from './commands/helpCommand.js';
 import { setupStartCommand } from './commands/startCommand.js';
 import { setupCurrencyCommand } from './commands/currencyCommand.js';
-import { setupMemeCommand } from './commands/memeCommand.js';
+import { setupMemeCommand, getMemeResponse } from './commands/memeCommand.js';
 import { setupJokeCommand } from './commands/jokeCommand.js';
 import { setupFactCommand } from './commands/factCommand.js';
 import { setupImageCommand } from './commands/imagineCommand.js';
@@ -41,10 +41,48 @@ bot.on('message', async (msg) => {
     }
 
     try {
-        // Show typing indicator
-        await bot.sendChatAction(chatId, 'typing');
+        // First check for meme intent using LLM
+        const intent = await llmService.detectIntent(messageText);
         
-        // Generate and send response
+        if (intent === 'meme') {
+            // Array of fun loading messages
+            const loadingMessages = [
+                "🚀 Launching meme delivery system...",
+                "📦 Packaging your meme with extra laughs...",
+                "🔍 Searching the memeverse...",
+                "⚡ Summoning the perfect meme...",
+                "🎯 Target acquired! Deploying meme...",
+                "🌟 Channeling meme energy...",
+                "🎭 Preparing your dose of humor...",
+                "🎨 Crafting your meme experience...",
+                "🎁 Wrapping up something special..."
+            ];
+            
+            // Select random message
+            const loadingMessage = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+            
+            // Send loading message first
+            const statusMessage = await bot.sendMessage(chatId, loadingMessage);
+            
+            try {
+                // Execute existing meme command functionality
+                await bot.sendChatAction(chatId, 'upload_photo');
+                await getMemeResponse(bot, chatId);
+                
+                // Delete the loading message after successful meme delivery
+                await bot.deleteMessage(chatId, statusMessage.message_id);
+            } catch (error) {
+                // If meme delivery fails, update the loading message
+                await bot.editMessageText('😅 Oops! The meme escaped. Let\'s try again!', {
+                    chat_id: chatId,
+                    message_id: statusMessage.message_id
+                });
+            }
+            return;
+        }
+
+        // If no meme intent, proceed with regular LLM conversation
+        await bot.sendChatAction(chatId, 'typing');
         const response = await llmService.generateResponse(messageText, chatId);
         await llmService.sendResponse(bot, chatId, response);
     } catch (error) {
@@ -82,3 +120,20 @@ setupImageCommand(bot);
 
 // Setup admin commands
 setupAdminCommands(bot);
+
+// Add this function to detect meme intents
+function detectMemeIntent(text) {
+    const memeKeywords = [
+        'send me a meme',
+        'show me a meme',
+        'i want a meme',
+        'give me a meme',
+        'share a meme',
+        'need a meme',
+        'meme please',
+        'another meme'
+    ];
+    
+    const normalizedText = text.toLowerCase().trim();
+    return memeKeywords.some(keyword => normalizedText.includes(keyword));
+}

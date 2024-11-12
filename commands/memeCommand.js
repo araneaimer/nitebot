@@ -262,3 +262,32 @@ const setupMemeCommand = (bot) => {
 };
 
 export { setupMemeCommand };
+
+export async function getMemeResponse(bot, chatId) {
+    try {
+        await bot.sendChatAction(chatId, 'upload_photo');
+        
+        const actionInterval = setInterval(() => {
+            bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
+        }, 3000);
+        
+        try {
+            // Use the existing getMemeFromReddit function
+            const meme = await getMemeFromReddit();
+            
+            const caption = `${meme.title}\n\n` +
+                          `💻 u/${meme.author}\n` +
+                          `⌨️ r/${meme.subreddit}`;
+
+            await bot.sendPhoto(chatId, meme.url, {
+                caption: caption,
+                reply_markup: getCustomInlineKeyboard(chatId, null) // null for random memes
+            });
+        } finally {
+            clearInterval(actionInterval);
+        }
+    } catch (error) {
+        console.error('Error sending meme:', error);
+        await bot.sendMessage(chatId, '❌ Sorry, I couldn\'t fetch a meme right now.');
+    }
+}
