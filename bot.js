@@ -41,10 +41,11 @@ bot.on('message', async (msg) => {
     }
 
     try {
-        // First check for meme intent using LLM
+        // Check for meme intent with potential subreddit
         const intent = await llmService.detectIntent(messageText);
+        console.log('Detected intent:', intent);
         
-        if (intent === 'meme') {
+        if (intent.type === 'meme') {
             // Array of fun loading messages
             const loadingMessages = [
                 "🚀 Launching meme delivery system...",
@@ -65,14 +66,34 @@ bot.on('message', async (msg) => {
             const statusMessage = await bot.sendMessage(chatId, loadingMessage);
             
             try {
-                // Execute existing meme command functionality
-                await bot.sendChatAction(chatId, 'upload_photo');
-                await getMemeResponse(bot, chatId);
+                // Create a fake message object
+                const fakeMsg = {
+                    ...msg,
+                    text: intent.subreddit ? `/meme ${intent.subreddit}` : '/meme'
+                };
+                console.log('Created fake message:', fakeMsg.text);
+
+                // Match the regex pattern
+                const match = fakeMsg.text.match(/\/(meme|mm)(?:\s+(\w+))?/);
+                console.log('Regex match:', match);
+
+                if (match) {
+                    if (intent.subreddit) {
+                        // Send confirmation message for subreddit setting
+                        await bot.sendMessage(chatId, `🎯 Setting default subreddit to r/${intent.subreddit}`);
+                    }
+                    
+                    // Call getMemeResponse directly
+                    await getMemeResponse(bot, chatId, intent.subreddit);
+                    console.log('Meme command executed directly');
+                } else {
+                    throw new Error('Invalid command format');
+                }
                 
                 // Delete the loading message after successful meme delivery
                 await bot.deleteMessage(chatId, statusMessage.message_id);
             } catch (error) {
-                // If meme delivery fails, update the loading message
+                console.error('Error details:', error);
                 await bot.editMessageText('😅 Oops! The meme escaped. Let\'s try again!', {
                     chat_id: chatId,
                     message_id: statusMessage.message_id

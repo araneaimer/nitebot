@@ -105,8 +105,10 @@ const getCustomInlineKeyboard = (chatId, preferredSubreddit) => {
 
 const setupMemeCommand = (bot) => {
     bot.onText(/\/(meme|mm)(?:\s+(\w+))?/, async (msg, match) => {
+        console.log('Meme command triggered with match:', match); // Log the command match
         const chatId = msg.chat.id;
         const requestedSubreddit = match[2]?.toLowerCase();
+        console.log('Requested subreddit:', requestedSubreddit); // Log the requested subreddit
         
         try {
             // Validate and update subreddit preference if specified
@@ -130,7 +132,9 @@ const setupMemeCommand = (bot) => {
             try {
                 // Use user's preferred subreddit if it exists
                 const preferredSubreddit = userPreferences.get(chatId);
+                console.log('Using preferred subreddit:', preferredSubreddit); // Log the preferred subreddit
                 const meme = await getMemeFromReddit(preferredSubreddit);
+                console.log('Meme fetched successfully:', meme.subreddit); // Log successful meme fetch
                 
                 // Calculate padding to align the second column
                 const firstColumnWidth = Math.max(
@@ -160,6 +164,7 @@ const setupMemeCommand = (bot) => {
             }
             
         } catch (error) {
+            console.error('Error in meme fetch:', error); // Detailed error logging
             let errorMessage = '😕 Sorry, I couldn\'t fetch a meme right now. Please try again later.';
             
             // Provide more specific error messages
@@ -263,31 +268,46 @@ const setupMemeCommand = (bot) => {
 
 export { setupMemeCommand };
 
-export async function getMemeResponse(bot, chatId) {
+export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
+    console.log('getMemeResponse called for chatId:', chatId, 'subreddit:', specificSubreddit);
     try {
         await bot.sendChatAction(chatId, 'upload_photo');
+        console.log('Chat action sent successfully');
         
         const actionInterval = setInterval(() => {
             bot.sendChatAction(chatId, 'upload_photo').catch(() => {});
         }, 3000);
         
         try {
-            // Use the existing getMemeFromReddit function
-            const meme = await getMemeFromReddit();
+            // Set user preference if specific subreddit is provided
+            if (specificSubreddit) {
+                console.log('Setting user preference for subreddit:', specificSubreddit);
+                userPreferences.set(chatId, specificSubreddit);
+            }
+
+            console.log('Attempting to fetch meme...');
+            // Use the specific subreddit or user preference
+            const targetSubreddit = specificSubreddit || userPreferences.get(chatId);
+            console.log('Target subreddit:', targetSubreddit);
+            
+            const meme = await getMemeFromReddit(targetSubreddit);
+            console.log('Meme fetched from:', meme.subreddit);
             
             const caption = `${meme.title}\n\n` +
                           `💻 u/${meme.author}\n` +
                           `⌨️ r/${meme.subreddit}`;
 
+            // Send photo only once
             await bot.sendPhoto(chatId, meme.url, {
                 caption: caption,
-                reply_markup: getCustomInlineKeyboard(chatId, null) // null for random memes
+                reply_markup: getCustomInlineKeyboard(chatId, targetSubreddit)
             });
+            console.log('Photo sent successfully');
         } finally {
             clearInterval(actionInterval);
         }
     } catch (error) {
-        console.error('Error sending meme:', error);
+        console.error('Detailed error in getMemeResponse:', error);
         await bot.sendMessage(chatId, '❌ Sorry, I couldn\'t fetch a meme right now.');
     }
 }

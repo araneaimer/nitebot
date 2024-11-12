@@ -113,18 +113,44 @@ class LLMService {
     async detectIntent(message) {
         try {
             const prompt = `
-            You are an intent detector. Analyze if this message indicates the user wants to see a meme.
-            Respond only with "meme" if the user wants a meme, or "other" for any other intent.
+            You are an intent detector for a meme bot. Analyze if this message indicates the user wants to see a meme.
+            If they mention a specific subreddit, extract it.
+            
+            Respond in this format:
+            - If user wants a random meme: "meme:random"
+            - If user specifies a subreddit: "meme:subredditname" (without r/ prefix)
+            - If not asking for meme: "other"
+            
+            Examples:
+            "send me a meme" -> "meme:random"
+            "get a meme from r/memes" -> "meme:memes"
+            "show meme from dankmemes" -> "meme:dankmemes"
+            "how are you" -> "other"
+            
             Message: "${message}"
             `;
 
             const result = await this.model.generateContent(prompt);
             const response = result.response.text().toLowerCase().trim();
             
-            return response === 'meme' ? 'meme' : 'other';
+            if (response.startsWith('meme:')) {
+                const [intent, subreddit] = response.split(':');
+                return {
+                    type: 'meme',
+                    subreddit: subreddit === 'random' ? null : subreddit
+                };
+            }
+            
+            return {
+                type: 'other',
+                subreddit: null
+            };
         } catch (error) {
             console.error('Error detecting intent:', error);
-            return 'other';
+            return {
+                type: 'other',
+                subreddit: null
+            };
         }
     }
 }
