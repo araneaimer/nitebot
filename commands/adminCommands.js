@@ -257,30 +257,6 @@ export const setupAdminCommands = (bot) => {
         }
     });
 
-    // Command to get bot statistics
-    bot.onText(/\/stats/, async (msg) => {
-        if (!isAdmin(msg)) {
-            return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
-        }
-        
-        try {
-            const stats = {
-                totalUsers: userSet.size,
-                lastUpdated: new Date().toLocaleString()
-            };
-            
-            await bot.sendMessage(msg.chat.id, 
-                `📊 *Bot Statistics*\n\n` +
-                `Total Unique Users: ${stats.totalUsers}\n` +
-                `Last Updated: ${stats.lastUpdated}`,
-                { parse_mode: 'Markdown' }
-            );
-        } catch (error) {
-            console.error('Stats command error:', error);
-            await bot.sendMessage(msg.chat.id, "❌ Error fetching statistics.");
-        }
-    });
-
     // Clear stats command (admin only)
     bot.onText(/\/clearstats/, async (msg) => {
         if (!isAdmin(msg)) {
@@ -406,11 +382,76 @@ export const setupAdminCommands = (bot) => {
 
     // Handle callback queries for pagination
     bot.on('callback_query', async (query) => {
-        if (!isAdmin({ from: query.from })) {
-            return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
+        // Only check admin status for admin-specific actions
+        if (query.data.startsWith('admin_help_') || query.data.startsWith('notify_')) {
+            if (!isAdmin({ from: query.from })) {
+                return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
+            }
         }
 
-        if (query.data.startsWith('admin_help_')) {
+        // Handle admin-specific actions
+        if (query.data.startsWith('notify_')) {
+            const action = query.data.split('_')[1];
+            
+            try {
+                // Get user profile information
+                const userInfo = await bot.getChat(MONITORED_CHAT_ID);
+                
+                switch (action) {
+                    case 'on':
+                        notifyEnabled = true;
+                        await bot.editMessageText(
+                            `🔔 *Notification Settings*\n\n` +
+                            `👤 *Monitored User:*\n` +
+                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                            `Status: ✅ Notifications ENABLED`,
+                            {
+                                chat_id: query.message.chat.id,
+                                message_id: query.message.message_id,
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [[
+                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
+                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                                    ]]
+                                }
+                            }
+                        );
+                        break;
+
+                    case 'off':
+                        notifyEnabled = false;
+                        await bot.editMessageText(
+                            `🔔 *Notification Settings*\n\n` +
+                            `👤 *Monitored User:*\n` +
+                            `• Name: ${userInfo.first_name}${userInfo.last_name ? ' ' + userInfo.last_name : ''}\n` +
+                            `• Username: ${userInfo.username ? '@' + userInfo.username : 'N/A'}\n` +
+                            `• Chat ID: \`${MONITORED_CHAT_ID}\`\n` +
+                            `• Bio: ${userInfo.bio || 'N/A'}\n\n` +
+                            `Status: ❌ Notifications DISABLED`,
+                            {
+                                chat_id: query.message.chat.id,
+                                message_id: query.message.message_id,
+                                parse_mode: 'Markdown',
+                                reply_markup: {
+                                    inline_keyboard: [[
+                                        { text: '✅ Turn ON', callback_data: 'notify_on' },
+                                        { text: '❌ Turn OFF', callback_data: 'notify_off' }
+                                    ]]
+                                }
+                            }
+                        );
+                        break;
+                }
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error('Notify button error:', error);
+                await bot.answerCallbackQuery(query.id, "❌ Error updating notification settings");
+            }
+        } else if (query.data.startsWith('admin_help_')) {
             const page = parseInt(query.data.split('_')[2]);
             
             try {
@@ -426,6 +467,11 @@ export const setupAdminCommands = (bot) => {
                 console.error('Admin help pagination error:', error);
                 await bot.answerCallbackQuery(query.id, "❌ Error updating help message.");
             }
+        }
+
+        // Handle non-admin actions (like meme sharing) without admin check
+        if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
+            // ... existing meme sharing code ...
         }
     });
 
@@ -775,6 +821,22 @@ export const setupAdminCommands = (bot) => {
             } catch (error) {
                 console.error('Notify button error:', error);
                 await bot.answerCallbackQuery(query.id, "❌ Error updating notification settings");
+            }
+        } else if (query.data.startsWith('admin_help_')) {
+            const page = parseInt(query.data.split('_')[2]);
+            
+            try {
+                const message = generateHelpMessage(page);
+                await bot.editMessageText(message, {
+                    chat_id: query.message.chat.id,
+                    message_id: query.message.message_id,
+                    parse_mode: 'Markdown',
+                    ...generateKeyboard(page)
+                });
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error('Admin help pagination error:', error);
+                await bot.answerCallbackQuery(query.id, "❌ Error updating help message.");
             }
         }
     });
