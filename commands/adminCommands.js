@@ -217,30 +217,27 @@ export const setupAdminCommands = (bot) => {
         }
     });
 
-    // Enhanced stats command with maintenance info
+    // Enhanced stats command with all information
     bot.onText(/\/stats/, async (msg) => {
         if (!isAdmin(msg)) {
             return bot.sendMessage(msg.chat.id, "⛔ This command is only available for administrators.");
         }
         
         try {
-            const maintenanceStatus = maintenanceMode
-                ? `🛠 *MAINTENANCE MODE ACTIVE*\n` +
-                  `Started: ${maintenanceStartTime.toLocaleString()}\n` +
-                  `Duration: ${getTimeDifference(maintenanceStartTime, new Date())}\n\n`
-                : '✅ Bot is operating normally\n\n';
-
-            const stats = {
-                totalUsers: userSet.size,
-                lastUpdated: new Date().toLocaleString()
-            };
-            
-            await bot.sendMessage(msg.chat.id, 
-                `📊 *Bot Statistics*\n\n` +
-                maintenanceStatus +
-                `Total Unique Users: ${stats.totalUsers}\n` +
-                `Last Updated: ${stats.lastUpdated}`,
-                { parse_mode: 'Markdown' }
+            // Send initial stats page
+            const message = await generateStatsMessage(1);
+            await bot.sendMessage(
+                msg.chat.id,
+                message,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: 'System Info', callback_data: 'stats_1' },
+                            { text: 'Bot Stats', callback_data: 'stats_2' }
+                        ]]
+                    }
+                }
             );
         } catch (error) {
             console.error('Stats command error:', error);
@@ -473,6 +470,33 @@ export const setupAdminCommands = (bot) => {
         if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
             // ... existing meme sharing code ...
         }
+
+        // Add this to your callback query handler
+        if (query.data.startsWith('stats_')) {
+            if (!isAdmin({ from: query.from })) {
+                return bot.answerCallbackQuery(query.id, "⛔ This action is only available for administrators.");
+            }
+            
+            const page = parseInt(query.data.split('_')[1]);
+            try {
+                const message = await generateStatsMessage(page);
+                await bot.editMessageText(message, {
+                    chat_id: query.message.chat.id,
+                    message_id: query.message.message_id,
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: 'System Info', callback_data: 'stats_1' },
+                            { text: 'Bot Stats', callback_data: 'stats_2' }
+                        ]]
+                    }
+                });
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error('Stats pagination error:', error);
+                await bot.answerCallbackQuery(query.id, "❌ Error updating statistics.");
+            }
+        }
     });
 
     bot.onText(/\/ping/, async (msg) => {
@@ -516,26 +540,6 @@ export const setupAdminCommands = (bot) => {
                 console.error(`Failed to send poll to ${chatId}:`, error);
             }
         }
-    });
-
-    bot.onText(/\/debug/, async (msg) => {
-        if (!isAdmin(msg)) return;
-        
-        const memory = process.memoryUsage();
-        const uptime = process.uptime();
-        
-        await bot.sendMessage(msg.chat.id,
-            `🔍 *Debug Information*\n\n` +
-            `*System:*\n` +
-            `• Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n` +
-            `• Memory: ${Math.round(memory.heapUsed / 1024 / 1024)}MB / ${Math.round(memory.heapTotal / 1024 / 1024)}MB\n\n` +
-            `*Bot Stats:*\n` +
-            `• Active Users: ${userSet.size}\n` +
-            `• Active Chats: ${activeChatIds.size}\n` +
-            `• Maintenance: ${maintenanceMode ? 'ON 🛠' : 'OFF ✅'}\n` +
-            `• Node Version: ${process.version}`,
-            { parse_mode: 'Markdown' }
-        );
     });
 
     bot.onText(/\/clear(?:\s+(\S+))?/, async (msg, match) => {
@@ -1052,4 +1056,43 @@ function getTimeDifference(startDate, endDate) {
     const paddedSeconds = seconds.toString().padStart(2, '0');
 
     return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+}
+
+// Add this helper function
+async function generateStatsMessage(page) {
+    const memory = process.memoryUsage();
+    const uptime = process.uptime();
+    
+    // Page 1: System Information
+    if (page === 1) {
+        return `🖥️ *System Information*\n\n` +
+            `*Hardware:*\n` +
+            `• Memory Usage: ${Math.round(memory.heapUsed / 1024 / 1024)}MB / ${Math.round(memory.heapTotal / 1024 / 1024)}MB\n` +
+            `• RSS: ${Math.round(memory.rss / 1024 / 1024)}MB\n` +
+            `• External: ${Math.round(memory.external / 1024 / 1024)}MB\n\n` +
+            `*Runtime:*\n` +
+            `• Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m\n` +
+            `• Node Version: ${process.version}\n` +
+            `• Platform: ${process.platform}\n\n` +
+            `_Last Updated: ${new Date().toLocaleString()}_`;
+    }
+    
+    // Page 2: Bot Statistics
+    if (page === 2) {
+        const maintenanceStatus = maintenanceMode
+            ? `🛠 *MAINTENANCE MODE ACTIVE*\n` +
+              `Started: ${maintenanceStartTime.toLocaleString()}\n` +
+              `Duration: ${getTimeDifference(maintenanceStartTime, new Date())}\n\n`
+            : '✅ Bot is operating normally\n\n';
+
+        return `📊 *Bot Statistics*\n\n` +
+            maintenanceStatus +
+            `*Activity:*\n` +
+            `• Total Users: ${userSet.size}\n` +
+            `• Active Chats: ${activeChatIds.size}\n\n` +
+            `*Status:*\n` +
+            `• Maintenance: ${maintenanceMode ? 'ON 🛠' : 'OFF ✅'}\n` +
+            `• Notifications: ${notifyEnabled ? 'ON 🔔' : 'OFF 🔕'}\n\n` +
+            `_Last Updated: ${new Date().toLocaleString()}_`;
+    }
 } 
