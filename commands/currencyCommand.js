@@ -87,6 +87,19 @@ async function convertCurrency(amount, fromCurrency, toCurrency) {
     }
 }
 
+async function fetchWithRetry(url, options, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await fetch(url, options);
+            if (response.ok) return response;
+        } catch (error) {
+            if (i === maxRetries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+        }
+    }
+    throw new Error('Max retries reached');
+}
+
 export const setupCurrencyCommand = (bot) => {
     bot.onText(/\/(currency|cr)(.*)/, async (msg, match) => {
         const chatId = msg.chat.id;

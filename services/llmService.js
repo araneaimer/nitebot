@@ -162,4 +162,24 @@ class LLMService {
     }
 }
 
+class RateLimiter {
+    constructor(maxRequests, timeWindow) {
+        this.requests = new Map();
+        this.maxRequests = maxRequests;
+        this.timeWindow = timeWindow;
+    }
+
+    canMakeRequest(id) {
+        const now = Date.now();
+        const userRequests = this.requests.get(id) || [];
+        const recentRequests = userRequests.filter(time => now - time < this.timeWindow);
+        
+        if (recentRequests.length >= this.maxRequests) return false;
+        
+        recentRequests.push(now);
+        this.requests.set(id, recentRequests);
+        return true;
+    }
+}
+
 export const llmService = new LLMService(); 

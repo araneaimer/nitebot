@@ -151,3 +151,55 @@ function detectMemeIntent(text) {
     const normalizedText = text.toLowerCase().trim();
     return memeKeywords.some(keyword => normalizedText.includes(keyword));
 }
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Add to bot.js
+function cleanupResources() {
+    // Cleanup old sessions
+    const hour = 60 * 60 * 1000;
+    userSessions.forEach((session, chatId) => {
+        if (Date.now() - session.timestamp > 24 * hour) {
+            userSessions.delete(chatId);
+        }
+    });
+    
+    // Cleanup other resources
+    userPreferences.forEach((pref, chatId) => {
+        if (!activeChatIds.has(chatId)) {
+            userPreferences.delete(chatId);
+        }
+    });
+}
+
+// Run cleanup every 6 hours
+setInterval(cleanupResources, 6 * 60 * 60 * 1000);
+
+function setupBotConnection() {
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+
+    bot.on('polling_error', (error) => {
+        console.error('Polling error:', error);
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            setTimeout(() => {
+                console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+                bot.stopPolling().then(() => bot.startPolling());
+            }, 5000 * Math.pow(2, reconnectAttempts));
+        } else {
+            console.error('Max reconnection attempts reached');
+            process.exit(1); // Let process manager restart the bot
+        }
+    });
+
+    bot.on('webhook_error', (error) => {
+        console.error('Webhook error:', error);
+    });
+}
