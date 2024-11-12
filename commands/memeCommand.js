@@ -22,6 +22,9 @@ try {
 // Add this after other constants
 export const userPreferences = new Map();
 
+// Add this at the top with other constants
+const lastMemeMessages = new Map(); // Stores the last meme message ID for each chat
+
 const getMemeFromReddit = async (subreddit = null) => {
     try {
         const targetSubreddit = subreddit || MEME_SUBREDDITS[Math.floor(Math.random() * MEME_SUBREDDITS.length)];
@@ -78,37 +81,72 @@ const getMemeFromReddit = async (subreddit = null) => {
 };
 
 const getCustomInlineKeyboard = (chatId, preferredSubreddit) => {
-    const buttons = [{
-        text: preferredSubreddit 
-            ? `🎲 Another meme from r/${preferredSubreddit}`
-            : '🎲 Another random meme',
-        callback_data: `meme_${preferredSubreddit || 'random'}`
-    }];
+    const buttons = [
+        // First row: Another meme button
+        [{
+            text: preferredSubreddit 
+                ? `🎲 Another meme from r/${preferredSubreddit}`
+                : '🎲 Another random meme',
+            callback_data: `meme_${preferredSubreddit || 'random'}`
+        }]
+    ];
 
-    // Add send button for specific users
+    // Second row: Send button (if applicable)
     if (chatId === Number(process.env.ARANE_CHAT_ID)) {
-        buttons.push({
+        buttons.push([{
             text: 'Send to Yvaine ❤️',
             callback_data: 'send_to_yvaine'
-        });
+        }]);
     } else if (chatId === Number(process.env.YVAINE_CHAT_ID)) {
-        buttons.push({
+        buttons.push([{
             text: 'Send to Arane ❤️',
             callback_data: 'send_to_arane'
-        });
+        }]);
     }
 
     return {
-        inline_keyboard: [buttons] // Put all buttons in the same row
+        inline_keyboard: buttons // Each array element becomes a new row
     };
+};
+
+const sendMemeWithKeyboard = async (bot, chatId, meme, preferredSubreddit) => {
+    try {
+        const caption = `${meme.title}\n\n` +
+                       `💻 u/${meme.author}\n` +
+                       `⌨️ r/${meme.subreddit}`;
+
+        // Send new meme with keyboard first
+        const sentMessage = await bot.sendPhoto(chatId, meme.url, {
+            caption: caption,
+            reply_markup: getCustomInlineKeyboard(chatId, preferredSubreddit)
+        });
+
+        // After new meme is sent, remove buttons from previous message
+        const lastMessageId = lastMemeMessages.get(chatId);
+        if (lastMessageId) {
+            try {
+                await bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
+                    chat_id: chatId,
+                    message_id: lastMessageId
+                });
+            } catch (error) {
+                console.log('Error removing previous keyboard:', error.message);
+            }
+        }
+
+        // Store the new message ID
+        lastMemeMessages.set(chatId, sentMessage.message_id);
+        
+        return sentMessage;
+    } catch (error) {
+        throw error;
+    }
 };
 
 const setupMemeCommand = (bot) => {
     bot.onText(/\/(meme|mm)(?:\s+(\w+))?/, async (msg, match) => {
-        console.log('Meme command triggered with match:', match); // Log the command match
         const chatId = msg.chat.id;
         const requestedSubreddit = match[2]?.toLowerCase();
-        console.log('Requested subreddit:', requestedSubreddit); // Log the requested subreddit
         
         try {
             // Validate and update subreddit preference if specified
@@ -117,7 +155,6 @@ const setupMemeCommand = (bot) => {
                     userPreferences.delete(chatId);
                     await bot.sendMessage(chatId, '🎲 Set to random subreddits mode!');
                 } else {
-                    // No validation against MEME_SUBREDDITS - allow any subreddit
                     userPreferences.set(chatId, requestedSubreddit);
                     await bot.sendMessage(chatId, `✅ Set default subreddit to r/${requestedSubreddit}`);
                 }
@@ -130,44 +167,16 @@ const setupMemeCommand = (bot) => {
             }, 3000);
             
             try {
-                // Use user's preferred subreddit if it exists
                 const preferredSubreddit = userPreferences.get(chatId);
-                console.log('Using preferred subreddit:', preferredSubreddit); // Log the preferred subreddit
                 const meme = await getMemeFromReddit(preferredSubreddit);
-                console.log('Meme fetched successfully:', meme.subreddit); // Log successful meme fetch
-                
-                // Calculate padding to align the second column
-                const firstColumnWidth = Math.max(
-                    `👤 u/${meme.author}`.length,
-                    `🔗 r/${meme.subreddit}`.length
-                ) + 4; // Add some extra spacing
-
-                // Create padded strings
-                const authorLine = `👤 u/${meme.author}`.padEnd(firstColumnWidth);
-                const subredditLine = `🔗 r/${meme.subreddit}`.padEnd(firstColumnWidth);
-                
-                const caption = `${meme.title}\n\n` +
-                              `💻 u/${meme.author}\n` +
-                              `⌨️ r/${meme.subreddit}`;
-
-                // Modified button text
-                const buttonText = preferredSubreddit 
-                    ? `🎲 Another meme from r/${preferredSubreddit}`
-                    : '🎲 Another random meme';
-
-                await bot.sendPhoto(chatId, meme.url, {
-                    caption: caption,
-                    reply_markup: getCustomInlineKeyboard(chatId, preferredSubreddit)
-                });
+                await sendMemeWithKeyboard(bot, chatId, meme, preferredSubreddit);
             } finally {
                 clearInterval(actionInterval);
             }
             
         } catch (error) {
-            console.error('Error in meme fetch:', error); // Detailed error logging
             let errorMessage = '😕 Sorry, I couldn\'t fetch a meme right now. Please try again later.';
             
-            // Provide more specific error messages
             if (error.message === 'Subreddit not found or has no posts') {
                 errorMessage = '❌ This subreddit doesn\'t exist or has no posts. Please try another one.';
             } else if (error.response?.status === 403) {
@@ -196,15 +205,7 @@ const setupMemeCommand = (bot) => {
                 
                 try {
                     const meme = await getMemeFromReddit(subreddit === 'random' ? null : subreddit);
-                    
-                    const caption = `${meme.title}\n\n` +
-                                  `💻 u/${meme.author}\n` +
-                                  `⌨️ r/${meme.subreddit}`;
-
-                    await bot.sendPhoto(chatId, meme.url, {
-                        caption: caption,
-                        reply_markup: getCustomInlineKeyboard(chatId, subreddit === 'random' ? null : subreddit)
-                    });
+                    await sendMemeWithKeyboard(bot, chatId, meme, subreddit === 'random' ? null : subreddit);
                 } finally {
                     clearInterval(actionInterval);
                 }
@@ -286,15 +287,8 @@ export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
 
             const targetSubreddit = specificSubreddit || userPreferences.get(chatId);
             const meme = await getMemeFromReddit(targetSubreddit);
+            await sendMemeWithKeyboard(bot, chatId, meme, targetSubreddit);
             
-            const caption = `${meme.title}\n\n` +
-                          `💻 u/${meme.author}\n` +
-                          `⌨️ r/${meme.subreddit}`;
-
-            await bot.sendPhoto(chatId, meme.url, {
-                caption: caption,
-                reply_markup: getCustomInlineKeyboard(chatId, targetSubreddit)
-            });
         } finally {
             clearInterval(actionInterval);
         }
