@@ -12,6 +12,7 @@ import { setupImageCommand } from './commands/imagineCommand.js';
 import { setupAdminCommands } from './commands/adminCommands.js';
 import { setupClearCommand } from './commands/clearCommand.js';
 import { llmService } from './services/llmService.js';
+import { voiceService } from './services/voiceService.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -102,6 +103,52 @@ bot.on('message', async (msg) => {
         await llmService.sendResponse(bot, chatId, response);
     } catch (error) {
         console.error('Error processing message:', error);
+    }
+});
+
+// Add voice message handler
+bot.on('voice', async (msg) => {
+    console.log('Received voice message:', msg.voice);
+    const chatId = msg.chat.id;
+    
+    // Send initial processing message
+    const statusMessage = await bot.sendMessage(chatId, '🎙️ *Transcription in progress...*', {
+        parse_mode: 'Markdown'
+    });
+
+    try {
+        // Get voice file path
+        const file = await bot.getFile(msg.voice.file_id);
+        console.log('Got file details:', file);
+        const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+        console.log('File URL:', fileUrl);
+
+        // Download and transcribe
+        const tempFilePath = await voiceService.downloadVoice(fileUrl);
+        console.log('Downloaded to:', tempFilePath);
+        const transcription = await voiceService.transcribeAudio(tempFilePath);
+        console.log('Transcription:', transcription);
+
+        // Update message with just the transcription
+        await bot.editMessageText(`🎙️ *Transcription:*\n${transcription}`, {
+            chat_id: chatId,
+            message_id: statusMessage.message_id,
+            parse_mode: 'Markdown'
+        });
+
+        // Send typing action before LLM response
+        await bot.sendChatAction(chatId, 'typing');
+
+        // Process with LLM and send as separate message
+        const response = await llmService.generateResponse(transcription, chatId);
+        await llmService.sendResponse(bot, chatId, response);
+
+    } catch (error) {
+        console.error('Error processing voice message:', error);
+        await bot.editMessageText('❌ Sorry, I had trouble processing your voice message. Please try again.', {
+            chat_id: chatId,
+            message_id: statusMessage.message_id
+        });
     }
 });
 
