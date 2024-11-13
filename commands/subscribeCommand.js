@@ -32,11 +32,8 @@ export function setupSubscribeCommand(bot) {
     }
 
     bot.onText(/^\/(?:subscribe|sub)(?:\s+(.+))?$/, async (msg, match) => {
-        console.log('Subscribe command triggered');
-        console.log('Match:', match);
         const chatId = msg.chat.id;
         const args = match[1] ? match[1].toLowerCase().split(/[\s,]+/) : [];
-        console.log('Parsed args:', args);
 
         if (!match[1]) {
             await bot.sendMessage(

@@ -4,10 +4,7 @@ import { getFact } from '../commands/factCommand.js';
 import { fetchJoke } from '../commands/jokeCommand.js';
 import { getMemeFromReddit } from '../commands/memeCommand.js';
 
-// Keep track of scheduled tasks
 const scheduledTasks = new Map();
-
-// Store bot instance
 let botInstance;
 
 async function fetchContent(type) {
@@ -35,22 +32,17 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
     const [hours, minutes] = time.split(':');
     let scheduledTime = moment().tz(timezone).set({ hours, minutes, seconds: 0 });
     
-    // If the time has already passed today, schedule for tomorrow
     if (scheduledTime.isBefore(now)) {
         scheduledTime = scheduledTime.add(1, 'day');
     }
 
     const msUntilScheduled = scheduledTime.diff(now);
-    console.log(`Scheduling ${contentType} for ${chatId} at ${scheduledTime.format('YYYY-MM-DD HH:mm:ss')} (${msUntilScheduled}ms from now)`);
-
     const taskKey = `${chatId}_${contentType}_${time}`;
     
-    // Clear any existing scheduled task
     if (scheduledTasks.has(taskKey)) {
         clearTimeout(scheduledTasks.get(taskKey));
     }
 
-    // Schedule new task
     const task = setTimeout(async () => {
         try {
             const content = await fetchContent(contentType);
@@ -98,7 +90,6 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
         } catch (error) {
             console.error(`Error sending scheduled content:`, error);
         } finally {
-            // Schedule next occurrence
             scheduleNextOccurrence(chatId, contentType, time, timezone);
         }
     }, msUntilScheduled);
@@ -107,25 +98,20 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
 }
 
 export function setupScheduler(bot) {
-    console.log('Setting up scheduler...');
-    botInstance = bot; // Store bot instance
+    botInstance = bot;
     
-    // Initial scheduling of all subscriptions
     const subscriptions = storageService.getSubscriptions();
     
     for (const [chatId, userSubs] of subscriptions.entries()) {
         for (const [contentType, subData] of Object.entries(userSubs)) {
             const { times, timezone } = subData;
-            // Schedule each time for this subscription
             times.forEach(time => {
                 scheduleNextOccurrence(chatId, contentType, time, timezone);
             });
         }
     }
 
-    // Listen for subscription changes
     storageService.onSubscriptionChange((chatId, subscriptionData) => {
-        // Clear existing schedules for this chat
         for (const taskKey of scheduledTasks.keys()) {
             if (taskKey.startsWith(chatId)) {
                 clearTimeout(scheduledTasks.get(taskKey));
@@ -133,7 +119,6 @@ export function setupScheduler(bot) {
             }
         }
 
-        // Schedule new times
         if (subscriptionData) {
             for (const [contentType, subData] of Object.entries(subscriptionData)) {
                 const { times, timezone } = subData;
