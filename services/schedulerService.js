@@ -56,8 +56,8 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
             const content = await fetchContent(contentType);
             if (!content) return;
 
-            // Helper function to escape special characters for MarkdownV2
             const escapeMarkdown = (text) => text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+            const subscriptionMessage = `||${contentType.charAt(0).toUpperCase() + contentType.slice(1)} from your daily ${contentType} subscription||`;
 
             if (typeof content === 'object' && content.type === 'meme') {
                 const caption = [
@@ -66,7 +66,7 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
                     `💻 u/${escapeMarkdown(content.author)}`,
                     `⌨️ r/${escapeMarkdown(content.subreddit)}`,
                     '',
-                    '||🔔 From your daily subscription||'
+                    subscriptionMessage
                 ].join('\n');
 
                 await botInstance.sendPhoto(chatId, content.url, {
@@ -79,7 +79,7 @@ function scheduleNextOccurrence(chatId, contentType, time, timezone) {
                     }
                 });
             } else {
-                const messageText = escapeMarkdown(content) + '\n\n||🔔 From your daily subscription||';
+                const messageText = escapeMarkdown(content) + '\n\n' + subscriptionMessage;
                 
                 await botInstance.sendMessage(chatId, messageText, {
                     parse_mode: 'MarkdownV2',
