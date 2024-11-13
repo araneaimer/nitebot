@@ -41,7 +41,7 @@ const getReactionKeyboard = () => {
     return {
         inline_keyboard: [
             Object.entries(REACTIONS).map(([key, value]) => ({
-                text: `${value.emoji} ${value.text}`,
+                text: value.emoji,
                 callback_data: `reaction_${key}`
             }))
         ]
