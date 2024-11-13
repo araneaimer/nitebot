@@ -15,17 +15,33 @@ export function setupTranscribeCommand(bot) {
         
         await bot.sendMessage(
             chatId, 
-            '🎙️ Please send a voice message to transcribe.\n\n_Send /cancel to cancel transcription mode._', 
-            { parse_mode: 'Markdown' }
+            'Please send a voice message to transcribe.', 
+            { 
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[
+                        { text: 'Cancel', callback_data: 'cancel_transcribe' }
+                    ]]
+                }
+            }
         );
     });
 
-    // Handle /cancel command
-    bot.onText(/\/cancel/, (msg) => {
-        const chatId = msg.chat.id;
-        if (transcribeModeUsers.has(chatId)) {
-            transcribeModeUsers.delete(chatId);
-            bot.sendMessage(chatId, '❌ Transcription mode cancelled.');
+    // Handle cancel button callback
+    bot.on('callback_query', async (query) => {
+        if (query.data === 'cancel_transcribe') {
+            const chatId = query.message.chat.id;
+            if (transcribeModeUsers.has(chatId)) {
+                transcribeModeUsers.delete(chatId);
+                await bot.editMessageText(
+                    'Transcription mode cancelled.',
+                    {
+                        chat_id: chatId,
+                        message_id: query.message.message_id
+                    }
+                );
+            }
+            await bot.answerCallbackQuery(query.id);
         }
     });
 
@@ -41,7 +57,7 @@ export function setupTranscribeCommand(bot) {
 
         const statusMessage = await bot.sendMessage(
             chatId, 
-            '🎙️ *Transcribing your message...*', 
+            'Transcribing your message...', 
             { parse_mode: 'Markdown' }
         );
 
@@ -53,7 +69,7 @@ export function setupTranscribeCommand(bot) {
             const transcription = await voiceService.transcribeAudio(tempFilePath);
 
             await bot.editMessageText(
-                `🎙️ *Transcription:*\n${transcription}`, 
+                `Transcription:\n${transcription}`, 
                 {
                     chat_id: chatId,
                     message_id: statusMessage.message_id,
@@ -63,7 +79,7 @@ export function setupTranscribeCommand(bot) {
         } catch (error) {
             console.error('Error transcribing voice message:', error);
             await bot.editMessageText(
-                '❌ Sorry, I had trouble transcribing your voice message. Please try again.',
+                'Sorry, I had trouble transcribing your voice message. Please try again.',
                 {
                     chat_id: chatId,
                     message_id: statusMessage.message_id
