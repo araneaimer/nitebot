@@ -14,6 +14,11 @@ import { setupClearCommand } from './commands/clearCommand.js';
 import { llmService } from './services/llmService.js';
 import { voiceService } from './services/voiceService.js';
 import { setupTranscribeCommand, transcribeModeUsers } from './commands/transcribeCommand.js';
+import { setupSubscribeCommand } from './commands/subscribeCommand.js';
+import { setupScheduler } from './services/schedulerService.js';
+import { getFact } from './commands/factCommand.js';
+import { fetchJoke } from './commands/jokeCommand.js';
+import { getMemeFromReddit } from './commands/memeCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -126,7 +131,7 @@ bot.on('voice', async (msg) => {
         const tempFilePath = await voiceService.downloadVoice(fileUrl);
         const transcription = await voiceService.transcribeAudio(tempFilePath);
 
-        await bot.editMessageText(`🎙️ *Transcription:*\n${transcription}`, {
+        await bot.editMessageText(`����️ *Transcription:*\n${transcription}`, {
             chat_id: chatId,
             message_id: statusMessage.message_id,
             parse_mode: 'Markdown'
@@ -173,6 +178,7 @@ setupJokeCommand(bot);
 setupFactCommand(bot);
 setupImageCommand(bot);
 setupTranscribeCommand(bot);
+setupSubscribeCommand(bot);
 
 // Setup admin commands
 setupAdminCommands(bot);
@@ -248,3 +254,5 @@ function setupBotConnection() {
         console.error('Webhook error:', error);
     });
 }
+
+setupScheduler(bot);

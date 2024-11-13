@@ -409,3 +409,5 @@ export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
         await bot.sendMessage(chatId, '❌ Sorry, I couldn\'t fetch a meme right now.');
     }
 }
+
+export { getMemeFromReddit };

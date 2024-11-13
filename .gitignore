@@ -130,3 +130,6 @@ dist
 .pnp.*
 
 start-bot.vbs
+nodemon.json
+
+data/subscriptions.json
