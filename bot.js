@@ -149,7 +149,7 @@ bot.on('voice', async (msg) => {
 
         // Clear animation and show transcription
         clearInterval(animationInterval);
-        const escapedTranscription = transcription.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+        const escapedTranscription = transcription.trim().replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
         
         await bot.editMessageText(
             `*Transcription:*\n${escapedTranscription}`,
