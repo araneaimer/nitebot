@@ -1,11 +1,15 @@
 import moment from 'moment-timezone';
-import { getSubscriptions } from '../commands/subscribeCommand.js';
 import { storageService } from './storageService.js';
 import { getFact } from '../commands/factCommand.js';
 import { fetchJoke } from '../commands/jokeCommand.js';
 import { getMemeFromReddit } from '../commands/memeCommand.js';
 
-// Import the content fetching functions
+// Keep track of scheduled tasks
+const scheduledTasks = new Map();
+
+// Store bot instance
+let botInstance;
+
 async function fetchContent(type) {
     try {
         switch (type) {
@@ -26,101 +30,115 @@ async function fetchContent(type) {
     }
 }
 
+function scheduleNextOccurrence(chatId, contentType, time, timezone) {
+    const now = moment().tz(timezone);
+    const [hours, minutes] = time.split(':');
+    let scheduledTime = moment().tz(timezone).set({ hours, minutes, seconds: 0 });
+    
+    // If the time has already passed today, schedule for tomorrow
+    if (scheduledTime.isBefore(now)) {
+        scheduledTime = scheduledTime.add(1, 'day');
+    }
+
+    const msUntilScheduled = scheduledTime.diff(now);
+    console.log(`Scheduling ${contentType} for ${chatId} at ${scheduledTime.format('YYYY-MM-DD HH:mm:ss')} (${msUntilScheduled}ms from now)`);
+
+    const taskKey = `${chatId}_${contentType}_${time}`;
+    
+    // Clear any existing scheduled task
+    if (scheduledTasks.has(taskKey)) {
+        clearTimeout(scheduledTasks.get(taskKey));
+    }
+
+    // Schedule new task
+    const task = setTimeout(async () => {
+        try {
+            const content = await fetchContent(contentType);
+            if (!content) return;
+
+            // Helper function to escape special characters for MarkdownV2
+            const escapeMarkdown = (text) => text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+
+            if (typeof content === 'object' && content.type === 'meme') {
+                const caption = [
+                    escapeMarkdown(content.title),
+                    '',
+                    `💻 u/${escapeMarkdown(content.author)}`,
+                    `⌨️ r/${escapeMarkdown(content.subreddit)}`,
+                    '',
+                    '||🔔 From your daily subscription||'
+                ].join('\n');
+
+                await botInstance.sendPhoto(chatId, content.url, {
+                    caption: caption,
+                    parse_mode: 'MarkdownV2',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '🎲 Another random meme', callback_data: 'meme_random' }
+                        ]]
+                    }
+                });
+            } else {
+                const messageText = escapeMarkdown(content) + '\n\n||🔔 From your daily subscription||';
+                
+                await botInstance.sendMessage(chatId, messageText, {
+                    parse_mode: 'MarkdownV2',
+                    reply_markup: contentType === 'fact' ? {
+                        inline_keyboard: [[
+                            { text: '🔄 Another Fact', callback_data: 'fact_random' },
+                            { text: '📚 Change Category', callback_data: 'fact_categories' }
+                        ]]
+                    } : {
+                        inline_keyboard: [[
+                            { text: '🔄 Another Joke', callback_data: 'joke_another' }
+                        ]]
+                    }
+                });
+            }
+        } catch (error) {
+            console.error(`Error sending scheduled content:`, error);
+        } finally {
+            // Schedule next occurrence
+            scheduleNextOccurrence(chatId, contentType, time, timezone);
+        }
+    }, msUntilScheduled);
+
+    scheduledTasks.set(taskKey, task);
+}
+
 export function setupScheduler(bot) {
     console.log('Setting up scheduler...');
+    botInstance = bot; // Store bot instance
     
-    // Check subscriptions every minute
-    setInterval(async () => {
-        const now = moment();
-        const currentTime = now.format('HH:mm');
-        console.log(`Checking subscriptions at ${currentTime}`);
+    // Initial scheduling of all subscriptions
+    const subscriptions = storageService.getSubscriptions();
+    
+    for (const [chatId, userSubs] of subscriptions.entries()) {
+        for (const [contentType, subData] of Object.entries(userSubs)) {
+            const { times, timezone } = subData;
+            // Schedule each time for this subscription
+            times.forEach(time => {
+                scheduleNextOccurrence(chatId, contentType, time, timezone);
+            });
+        }
+    }
 
-        const currentSubscriptions = getSubscriptions();
-        console.log('Active subscriptions:', [...currentSubscriptions.entries()]);
-
-        for (const [chatId, userSubs] of currentSubscriptions.entries()) {
-            for (const [contentType, subData] of Object.entries(userSubs)) {
-                const { times, timezone = 'UTC' } = subData;
-                const userTime = moment().tz(timezone).format('HH:mm');
-                
-                if (times.includes(userTime)) {
-                    console.log(`Sending ${contentType} to ${chatId} at ${userTime}`);
-                    try {
-                        await bot.sendChatAction(chatId, 'typing');
-                        const content = await fetchContent(contentType);
-                        
-                        if (!content) {
-                            console.log(`No content fetched for ${contentType}`);
-                            continue;
-                        }
-
-                        if (typeof content === 'object' && content.type === 'meme') {
-                            await bot.sendPhoto(chatId, content.url, {
-                                caption: content.title,
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '🔄 Another Meme', callback_data: 'meme_another' },
-                                        { text: '❌ Stop Daily Memes', callback_data: 'unsub_meme' }
-                                    ]]
-                                }
-                            });
-                        } else {
-                            await bot.sendMessage(chatId, content, {
-                                parse_mode: 'Markdown',
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: `🔄 Another ${contentType}`, callback_data: `${contentType}_another` },
-                                        { text: `❌ Stop Daily ${contentType}s`, callback_data: `unsub_${contentType}` }
-                                    ]]
-                                }
-                            });
-                        }
-                        console.log(`Successfully sent ${contentType} to ${chatId}`);
-                    } catch (error) {
-                        console.error(`Error sending ${contentType} to ${chatId}:`, error);
-                        if (error.code === 'ETELEGRAM' && error.response?.statusCode === 403) {
-                            console.log(`Removing inaccessible chat ${chatId} from subscriptions`);
-                            storageService.removeSubscription(chatId);
-                        }
-                    }
-                }
+    // Listen for subscription changes
+    storageService.onSubscriptionChange((chatId, subscriptionData) => {
+        // Clear existing schedules for this chat
+        for (const taskKey of scheduledTasks.keys()) {
+            if (taskKey.startsWith(chatId)) {
+                clearTimeout(scheduledTasks.get(taskKey));
+                scheduledTasks.delete(taskKey);
             }
         }
-    }, 60000); // Check every minute
 
-    // Handle "Another" button callbacks
-    bot.on('callback_query', async (query) => {
-        if (query.data.endsWith('_another')) {
-            const contentType = query.data.split('_')[0];
-            const chatId = query.message.chat.id;
-
-            try {
-                await bot.answerCallbackQuery(query.id);
-                await bot.sendChatAction(chatId, 'typing');
-
-                const content = await fetchContent(contentType);
-                if (!content) return;
-
-                // Delete the original message
-                await bot.deleteMessage(chatId, query.message.message_id);
-
-                // Send new content
-                if (typeof content === 'object' && content.type === 'meme') {
-                    await bot.sendPhoto(chatId, content.url, {
-                        caption: content.title,
-                        reply_markup: query.message.reply_markup
-                    });
-                } else {
-                    await bot.sendMessage(chatId, content, {
-                        parse_mode: 'Markdown',
-                        reply_markup: query.message.reply_markup
-                    });
-                }
-            } catch (error) {
-                console.error(`Error handling ${contentType} refresh:`, error);
-                await bot.answerCallbackQuery(query.id, {
-                    text: 'Sorry, something went wrong. Please try again.',
-                    show_alert: true
+        // Schedule new times
+        if (subscriptionData) {
+            for (const [contentType, subData] of Object.entries(subscriptionData)) {
+                const { times, timezone } = subData;
+                times.forEach(time => {
+                    scheduleNextOccurrence(chatId, contentType, time, timezone);
                 });
             }
         }

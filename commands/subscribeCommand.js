@@ -236,6 +236,44 @@ export function setupSubscribeCommand(bot) {
             }
         });
     });
+
+    // Add to setupSubscribeCommand
+    bot.on('callback_query', async (query) => {
+        const chatId = query.message.chat.id;
+        
+        switch (query.data) {
+            case 'sub_new':
+                await bot.sendMessage(
+                    chatId,
+                    'To add a new subscription, use:\n' +
+                    '`/sub [type] [time]`\n\n' +
+                    'Examples:\n' +
+                    '• `/sub meme 9:00`\n' +
+                    '• `/sub fact 14:30`\n' +
+                    '• `/sub joke 8pm`',
+                    { parse_mode: 'Markdown' }
+                );
+                break;
+
+            case 'unsub_all':
+                storageService.removeSubscription(chatId);
+                await bot.editMessageText(
+                    '✅ All subscriptions have been cancelled.',
+                    {
+                        chat_id: chatId,
+                        message_id: query.message.message_id,
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { text: '➕ Subscribe Again', callback_data: 'sub_new' }
+                            ]]
+                        }
+                    }
+                );
+                break;
+        }
+
+        await bot.answerCallbackQuery(query.id);
+    });
 }
 
 // Export the getter for scheduler

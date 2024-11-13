@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { EventEmitter } from 'events';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_PATH = path.join(__dirname, '../data/subscriptions.json');
@@ -40,6 +41,8 @@ function initializeStorage() {
 // Initialize storage on module load
 initializeStorage();
 
+const subscriptionEmitter = new EventEmitter();
+
 export const storageService = {
     loadSubscriptions() {
         try {
@@ -74,7 +77,7 @@ export const storageService = {
         console.log(`Updating subscription for ${chatId}:`, subscriptionData);
         subscriptionsMap.set(chatId.toString(), subscriptionData);
         this.saveSubscriptions(subscriptionsMap);
-        console.log('Current subscriptions after update:', Object.fromEntries(subscriptionsMap));
+        subscriptionEmitter.emit('subscriptionChange', chatId, subscriptionData);
     },
 
     removeSubscription(chatId) {
@@ -82,11 +85,15 @@ export const storageService = {
         if (subscriptionsMap.has(chatId.toString())) {
             subscriptionsMap.delete(chatId.toString());
             this.saveSubscriptions(subscriptionsMap);
-            console.log('Subscription removed successfully');
+            subscriptionEmitter.emit('subscriptionChange', chatId, null);
         }
     },
 
     getSubscriptions() {
         return subscriptionsMap;
+    },
+
+    onSubscriptionChange(callback) {
+        subscriptionEmitter.on('subscriptionChange', callback);
     }
 }; 

@@ -51,4 +51,6 @@ export function setupJokeCommand(bot) {
         // Send the joke
         await bot.sendMessage(msg.chat.id, joke);
     });
-} 
+}
+
+export { fetchJoke };  // Add this export 
