@@ -30,8 +30,8 @@ const sharedMemes = new Map(); // messageId -> { fromId, toId, memeData }
 // Add this constant for reaction buttons
 const REACTIONS = {
     HILARIOUS: { emoji: '🤣' },
-    LOVE: { emoji: '❤️' },
-    FIRE: { emoji: '🔥' },
+    LOVE: { emoji: '❤' },
+    FIRE: { emoji: '' },
     DEAD: { emoji: '💀' },
     MEH: { emoji: '😐' }
 };
@@ -172,7 +172,8 @@ const sendMemeWithKeyboard = async (bot, chatId, meme, preferredSubreddit) => {
     }
 };
 
-const setupMemeCommand = (bot) => {
+// Modify your setupMemeCommand function
+function setupMemeCommand(bot) {
     bot.onText(/\/(meme|mm)(?:\s+(\w+))?/, async (msg, match) => {
         const chatId = msg.chat.id;
         const requestedSubreddit = match[2]?.toLowerCase();
@@ -255,23 +256,26 @@ const setupMemeCommand = (bot) => {
                 });
             }
         } else if (query.data === 'send_to_yvaine' || query.data === 'send_to_arane') {
+            // First acknowledge the callback without alert
+            await bot.answerCallbackQuery(query.id);
+
             try {
                 const targetChatId = query.data === 'send_to_yvaine' 
                     ? process.env.YVAINE_CHAT_ID 
                     : process.env.ARANE_CHAT_ID;
 
-                // Get the original caption and meme details
                 const originalCaption = query.message.caption;
-                const title = originalCaption.split('\n\n')[0];
+                const title = originalCaption.split('\n\n')[0]
+                    .replace(/([*_`\[\]])/g, '\\$1');
+
                 const photo = query.message.photo[query.message.photo.length - 1].file_id;
 
-                // Create new caption with sender info in bold
                 const senderInfo = query.data === 'send_to_yvaine' 
                     ? '*Meme shared by Arane 💝*'
                     : '*Meme shared by Yvaine 💝*';
                 const newCaption = `${title}\n\n${senderInfo}`;
 
-                // Send the meme with reaction buttons
+                // Send the meme
                 const sentMessage = await bot.sendPhoto(
                     targetChatId,
                     photo,
@@ -292,16 +296,35 @@ const setupMemeCommand = (bot) => {
                     }
                 });
 
-                // Send success message to sender
-                await bot.answerCallbackQuery(query.id, {
-                    text: '💝 Meme has been sent!',
-                    show_alert: true
-                });
+                // Send confirmation message and delete after 5 seconds
+                const confirmMessage = await bot.sendMessage(
+                    query.message.chat.id,
+                    'Meme has been shared successfully! 💝'
+                );
+                
+                setTimeout(async () => {
+                    try {
+                        await bot.deleteMessage(query.message.chat.id, confirmMessage.message_id);
+                    } catch (deleteError) {
+                        console.log('Error deleting confirmation message:', deleteError.message);
+                    }
+                }, 5000);
+
             } catch (error) {
-                await bot.answerCallbackQuery(query.id, {
-                    text: '❌ Failed to send the meme. Please try again.',
-                    show_alert: true
-                });
+                console.error('Share error:', error);
+                // Send error message and delete after 5 seconds
+                const errorMessage = await bot.sendMessage(
+                    query.message.chat.id,
+                    '❌ Failed to share meme. Please try again.'
+                );
+
+                setTimeout(async () => {
+                    try {
+                        await bot.deleteMessage(query.message.chat.id, errorMessage.message_id);
+                    } catch (deleteError) {
+                        console.log('Error deleting error message:', deleteError.message);
+                    }
+                }, 5000);
             }
         } else if (query.data.startsWith('reaction_')) {
             try {
@@ -319,7 +342,7 @@ const setupMemeCommand = (bot) => {
                         sharedMeme.memeData.photo,
                         {
                             caption: `${notification}${sharedMeme.memeData.title}\n\n` +
-                                    `*${query.from.first_name} reacted with ${reaction.emoji} ${reaction.text}*`,
+                                    `*${query.from.first_name} reacted with ${reaction.emoji}*`,
                             parse_mode: 'Markdown'
                         }
                     );
@@ -379,7 +402,7 @@ const setupMemeCommand = (bot) => {
     });
 };
 
-export { setupMemeCommand };
+export { setupMemeCommand, getMemeFromReddit };
 
 export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
     try {
@@ -409,5 +432,3 @@ export async function getMemeResponse(bot, chatId, specificSubreddit = null) {
         await bot.sendMessage(chatId, '❌ Sorry, I couldn\'t fetch a meme right now.');
     }
 }
-
-export { getMemeFromReddit };
