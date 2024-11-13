@@ -49,17 +49,30 @@ export function setupTranscribeCommand(bot) {
     bot.on('voice', async (msg) => {
         const chatId = msg.chat.id;
 
-        // Only process if user is in transcribe mode
         if (!transcribeModeUsers.has(chatId)) return;
-
-        // Remove user from transcribe mode
         transcribeModeUsers.delete(chatId);
 
+        // Start with initial frame
         const statusMessage = await bot.sendMessage(
             chatId, 
-            'Transcribing your message...', 
+            '*Transcription in progress* ◡', 
             { parse_mode: 'Markdown' }
         );
+
+        // Setup animation frames
+        const frames = ['◜', '◝', '◞', '◟'];
+        let frameIndex = 0;
+        const animationInterval = setInterval(() => {
+            bot.editMessageText(
+                `*Transcription in progress* ${frames[frameIndex]}`,
+                {
+                    chat_id: chatId,
+                    message_id: statusMessage.message_id,
+                    parse_mode: 'Markdown'
+                }
+            ).catch(() => {});
+            frameIndex = (frameIndex + 1) % frames.length;
+        }, 150);
 
         try {
             const file = await bot.getFile(msg.voice.file_id);
@@ -68,21 +81,31 @@ export function setupTranscribeCommand(bot) {
             const tempFilePath = await voiceService.downloadVoice(fileUrl);
             const transcription = await voiceService.transcribeAudio(tempFilePath);
 
+            // Clear animation and show result
+            clearInterval(animationInterval);
+            
+            // Escape special characters for MarkdownV2
+            const escapedTranscription = transcription.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+
             await bot.editMessageText(
-                `Transcription:\n${transcription}`, 
+                `*Transcription:*\n${escapedTranscription}`, 
                 {
                     chat_id: chatId,
                     message_id: statusMessage.message_id,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'MarkdownV2'
                 }
             );
         } catch (error) {
+            // Clear animation on error
+            clearInterval(animationInterval);
             console.error('Error transcribing voice message:', error);
+            
             await bot.editMessageText(
-                'Sorry, I had trouble transcribing your voice message. Please try again.',
+                '❌ Sorry, I had trouble transcribing your voice message\\. Please try again\\.', 
                 {
                     chat_id: chatId,
-                    message_id: statusMessage.message_id
+                    message_id: statusMessage.message_id,
+                    parse_mode: 'MarkdownV2'
                 }
             );
         }
