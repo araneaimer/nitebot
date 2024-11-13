@@ -18,7 +18,6 @@ class VoiceService {
 
     async downloadVoice(fileUrl) {
         try {
-            console.log('Downloading voice from:', fileUrl);
             const response = await fetch(fileUrl);
             if (!response.ok) {
                 throw new Error(`Failed to download voice file: ${response.statusText}`);
@@ -34,7 +33,6 @@ class VoiceService {
             
             const tempPath = path.join(tempDir, `voice_${Date.now()}.oga`);
             await writeFile(tempPath, buffer);
-            console.log('Voice file saved to:', tempPath);
             return tempPath;
         } catch (error) {
             console.error('Error downloading voice:', error);
@@ -44,28 +42,20 @@ class VoiceService {
 
     async transcribeAudio(filePath) {
         try {
-            console.log('Starting transcription of:', filePath);
-            
-            // Read file as buffer
             const audioBuffer = await readFile(filePath);
             
-            // Use Hugging Face's Whisper model for transcription
             const result = await this.hf.automaticSpeechRecognition({
                 model: 'openai/whisper-base',
                 data: audioBuffer,
             });
             
-            console.log('Transcription completed:', result.text);
             return result.text;
-
         } catch (error) {
             console.error('Error transcribing audio:', error);
             throw error;
         } finally {
-            // Clean up the temporary file
             try {
                 await unlink(filePath);
-                console.log('Cleaned up temporary file:', filePath);
             } catch (error) {
                 console.error('Error cleaning up file:', error);
             }
