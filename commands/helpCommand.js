@@ -56,7 +56,7 @@ I am a versatile personal assistant bot currently under development.`;
                 '/clear - Delete last 100 messages'
             ],
             category: 'Chat Management',
-            note: 'Messages older than 48 hours cannot be deleted due to Telegram limitations.'
+            note: '\nMessages older than 48 hours cannot be deleted due to Telegram limitations.'
         },
         {
             command: '/fact, /facts, /ft',
@@ -76,7 +76,7 @@ I am a versatile personal assistant bot currently under development.`;
                 '/mm programmerhumor - Get memes from r/programmerhumor'
             ],
             category: 'Entertainment',
-            note: 'Use /meme list to see available subreddits. Default subreddit: memes'
+            note: '\nUse /meme list to see available subreddits. Default subreddit: memes'
         },
         {
             command: '/joke, /jk',
@@ -84,6 +84,17 @@ I am a versatile personal assistant bot currently under development.`;
             usage: '/joke',
             examples: ['/joke'],
             category: 'Entertainment'
+        },
+        {
+            command: '/transcribe, /trcb',
+            description: 'Transcribe voice messages to text',
+            usage: '/transcribe',
+            examples: [
+                '/transcribe - Enter transcription mode',
+                '/trcb - Short form command for transcription'
+            ],
+            category: 'Utilities',
+            note: '\nSend a voice message after activating transcription mode. Use the Cancel button to exit the mode.'
         }
     ];
 
