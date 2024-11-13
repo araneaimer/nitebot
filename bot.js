@@ -13,7 +13,7 @@ import { setupAdminCommands } from './commands/adminCommands.js';
 import { setupClearCommand } from './commands/clearCommand.js';
 import { llmService } from './services/llmService.js';
 import { voiceService } from './services/voiceService.js';
-import { setupTranscribeCommand, transcribeModeUsers } from './commands/transcribeCommand.js';
+import { setupTranscribeCommand, transcribeModeUsers, handleTranscription } from './commands/transcribeCommand.js';
 import { setupSubscribeCommand } from './commands/subscribeCommand.js';
 import { setupScheduler } from './services/schedulerService.js';
 import { getFact } from './commands/factCommand.js';
@@ -119,34 +119,59 @@ bot.on('voice', async (msg) => {
     // Skip if user is in transcribe mode
     if (transcribeModeUsers.has(chatId)) return;
     
-    // Send initial processing message
-    const statusMessage = await bot.sendMessage(chatId, '🎙️ *Transcription in progress...*', {
-        parse_mode: 'Markdown'
-    });
-
     try {
+        // Show transcription animation first
+        const statusMessage = await bot.sendMessage(
+            chatId, 
+            '*Transcription in progress* ◡', 
+            { parse_mode: 'MarkdownV2' }
+        );
+
+        const frames = ['◜', '◝', '◞', '◟'];
+        let frameIndex = 0;
+        const animationInterval = setInterval(() => {
+            bot.editMessageText(
+                `*Transcription in progress* ${frames[frameIndex]}`,
+                {
+                    chat_id: chatId,
+                    message_id: statusMessage.message_id,
+                    parse_mode: 'MarkdownV2'
+                }
+            ).catch(() => {});
+            frameIndex = (frameIndex + 1) % frames.length;
+        }, 150);
+
+        // Get the transcription while animation is showing
         const file = await bot.getFile(msg.voice.file_id);
         const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-
         const tempFilePath = await voiceService.downloadVoice(fileUrl);
         const transcription = await voiceService.transcribeAudio(tempFilePath);
 
-        await bot.editMessageText(`����️ *Transcription:*\n${transcription}`, {
-            chat_id: chatId,
-            message_id: statusMessage.message_id,
-            parse_mode: 'Markdown'
-        });
+        // Clear animation and show transcription
+        clearInterval(animationInterval);
+        const escapedTranscription = transcription.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+        
+        await bot.editMessageText(
+            `*Transcription:*\n${escapedTranscription}`,
+            {
+                chat_id: chatId,
+                message_id: statusMessage.message_id,
+                parse_mode: 'MarkdownV2'
+            }
+        );
 
+        // Generate AI response
         await bot.sendChatAction(chatId, 'typing');
         const response = await llmService.generateResponse(transcription, chatId);
         await llmService.sendResponse(bot, chatId, response);
 
     } catch (error) {
         console.error('Error processing voice message:', error);
-        await bot.editMessageText('❌ Sorry, I had trouble processing your voice message. Please try again.', {
-            chat_id: chatId,
-            message_id: statusMessage.message_id
-        });
+        await bot.sendMessage(
+            chatId,
+            '❌ Sorry, I had trouble processing your voice message\\. Please try again\\.', 
+            { parse_mode: 'MarkdownV2' }
+        );
     }
 });
 

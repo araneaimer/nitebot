@@ -133,3 +133,5 @@ start-bot.vbs
 nodemon.json
 
 data/subscriptions.json
+
+temp/*
