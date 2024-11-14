@@ -36,8 +36,11 @@ async function fetchMovieInfo(query, isImdbId = false) {
 }
 
 function formatMovieInfo(movie) {
-    // Create basic info with fancy unicode characters
-    const basicInfo = `📀 𝖳𝗂𝗍𝗅𝖾 : ${movie.Title}
+    // Create IMDb URL from movie ID
+    const imdbUrl = `https://www.imdb.com/title/${movie.imdbID}`;
+    
+    // Create basic info with fancy unicode characters and HTML formatting
+    const basicInfo = `📀 𝖳𝗂𝗍𝗅𝖾 : <a href="${imdbUrl}">${movie.Title}</a>
 
 🌟 𝖱𝖺𝗍𝗂𝗇𝗀 : ${movie.imdbRating || 'N/A'}/10
 📆 𝖱𝖾𝗅𝖾𝖺𝗌𝖾 : ${movie.Released || 'N/A'}
