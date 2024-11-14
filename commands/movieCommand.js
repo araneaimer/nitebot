@@ -9,8 +9,8 @@ const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
-// Add cache to store which movie an actor was viewed from
-const actorMovieCache = new Map();
+// Modify the cache structure to be message-specific
+const messageActorCache = new Map(); // Store as messageId_actorName -> movieTitle
 
 // At the top with other constants
 const movieTitleCache = new Map(); // Cache to store movie titles by message ID
@@ -60,8 +60,8 @@ function formatMovieInfo(movie) {
 📆 𝖱𝖾𝗅𝖾𝖺𝗌𝖾 : ${movie.Released || 'N/A'}
 🎭 𝖦𝖾𝗇𝗋𝖾 : ${movie.Genre || 'N/A'}
 🔊 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 : ${movie.Language || 'N/A'}
-🎥 𝖣𝗂𝗋𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
-🔆 𝖲𝗍𝖺𝗋𝗌 : ${actorsFormatted}
+🎥 𝖣𝗂𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
+🔆 𝗍𝖺𝗋𝗌 : ${actorsFormatted}
 
 🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : <code>${movie.Plot || 'No plot available'}</code>`;
 
@@ -90,6 +90,10 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
             }, [])
         };
 
+        // Clear previous caches before sending new movie info
+        movieTitleCache.clear();
+        messageActorCache.clear();
+
         // Send message and store the message ID with movie title
         let sentMessage;
         if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
@@ -105,7 +109,7 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
             });
         }
         
-        // Store the movie title with the message ID
+        // Store the new movie title with the message ID
         movieTitleCache.set(sentMessage.message_id, movieInfo.Title);
         
     } catch (error) {
@@ -208,6 +212,10 @@ export function setupMovieCommand(bot) {
         const chatId = msg.chat.id;
         const searchQuery = match[2]?.trim();
 
+        // Clear all caches when a new movie command is executed
+        movieTitleCache.clear();
+        messageActorCache.clear();
+
         if (!searchQuery) {
             await bot.sendMessage(
                 chatId,
@@ -275,8 +283,9 @@ export function setupMovieCommand(bot) {
                     throw new Error('Movie information not found');
                 }
 
-                // Store in actor-movie cache
-                actorMovieCache.set(actorName, movieTitle);
+                // Store with combined key of messageId and actorName
+                const cacheKey = `${messageId}_${actorName}`;
+                messageActorCache.set(cacheKey, movieTitle);
 
                 // Show loading message
                 await bot.editMessageCaption('🔍 Fetching actor information...', {
@@ -288,21 +297,7 @@ export function setupMovieCommand(bot) {
                 const actorInfo = await fetchActorInfo(actorName);
                 let formattedInfo = formatActorInfo(actorInfo);
 
-                // If still too long, use a more aggressive truncation
-                if (formattedInfo.length > 1024) {
-                    const maxBioLength = 300;
-                    let biography = actorInfo.biography;
-                    biography = biography.substring(0, maxBioLength) + '...\n[Biography truncated]';
-                    formattedInfo = `🎭 ${actorInfo.name}
-
-🎂 Birthday: ${actorInfo.birthday}
-📍 Place of Birth: ${actorInfo.place_of_birth}
-
-📝 Biography:
-${biography}`;
-                }
-
-                // Update message with actor info
+                // Update message with actor info and include messageId in callback data
                 if (actorInfo.profile_path) {
                     await bot.editMessageMedia({
                         type: 'photo',
@@ -314,18 +309,10 @@ ${biography}`;
                         message_id: messageId,
                         reply_markup: {
                             inline_keyboard: [[
-                                { text: '« Back to Movie', callback_data: `back_to_movie:${actorName}` }
-                            ]]
-                        }
-                    });
-                } else {
-                    await bot.editMessageCaption(formattedInfo, {
-                        chat_id: chatId,
-                        message_id: messageId,
-                        parse_mode: 'HTML',
-                        reply_markup: {
-                            inline_keyboard: [[
-                                { text: '« Back to Movie', callback_data: `back_to_movie:${actorName}` }
+                                { 
+                                    text: '« Back to Movie', 
+                                    callback_data: `back_to_movie:${messageId}_${actorName}` 
+                                }
                             ]]
                         }
                     });
@@ -339,10 +326,12 @@ ${biography}`;
             }
         } else if (query.data.startsWith('back_to_movie:')) {
             try {
-                // Get actor name from callback data
-                const actorName = query.data.replace('back_to_movie:', '');
-                // Get movie title from cache
-                const movieTitle = actorMovieCache.get(actorName);
+                // Extract messageId and actorName from callback data
+                const [messageId, actorName] = query.data.replace('back_to_movie:', '').split('_');
+                const cacheKey = `${messageId}_${actorName}`;
+                
+                // Get movie title from the message-specific cache
+                const movieTitle = messageActorCache.get(cacheKey);
                 
                 if (!movieTitle) {
                     throw new Error('Movie information not found');
@@ -352,7 +341,7 @@ ${biography}`;
                 const movieInfo = await fetchMovieInfo(movieTitle);
                 const formattedInfo = formatMovieInfo(movieInfo);
                 
-                // Create actor buttons
+                // Create actor buttons with message-specific callback data
                 const actorButtons = movieInfo.Actors.split(', ').map(actor => ({
                     text: actor,
                     callback_data: `actor:${actor}`
