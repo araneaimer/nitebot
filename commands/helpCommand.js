@@ -106,6 +106,14 @@ I am a versatile personal assistant bot currently under development.`;
             ],
             category: 'Entertainment',
             note: '\nClicking on the movie title opens its IMDb page. The storyline text is copyable.'
+        },
+        {
+            command: '/translate, /trns',
+            description: 'Translate text between languages',
+            usage: '/translate or /trns',
+            examples: ['/translate', '/trns'],
+            category: 'Utilities',
+            note: '\nSupports multiple languages with auto-detection capability.'
         }
     ];
 

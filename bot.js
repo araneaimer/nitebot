@@ -20,6 +20,7 @@ import { getFact } from './commands/factCommand.js';
 import { fetchJoke } from './commands/jokeCommand.js';
 import { getMemeFromReddit } from './commands/memeCommand.js';
 import { setupMovieCommand } from './commands/movieCommand.js';
+import { setupTranslateCommand } from './commands/translateCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -285,3 +286,4 @@ setupScheduler(bot);
 
 // Add this line with your other command setups
 setupMovieCommand(bot);
+setupTranslateCommand(bot);
