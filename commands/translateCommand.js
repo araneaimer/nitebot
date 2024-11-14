@@ -1,8 +1,5 @@
 import axios from 'axios';
 
-// Track users in translation mode
-const translateModeUsers = new Map();
-
 // Lingva API endpoints with fallbacks
 const LINGVA_INSTANCES = [
     'https://lingva.ml',
@@ -111,70 +108,60 @@ const getTranslateAnotherKeyboard = () => ({
     }
 });
 
-// When language parameter is invalid or not provided, show quick language selection
-const showQuickLanguageSelection = async (bot, chatId, text) => {
-    const popularLanguages = [
-        ['English', 'en'],
-        ['Spanish', 'es'],
-        ['Chinese', 'zh'],
-        ['Japanese', 'ja'],
-        ['Russian', 'ru'],
-        ['German', 'de'],
-        ['Italian', 'it'],
-        ['Hindi', 'hi']
-    ];
-
-    // Store the text to translate
-    translateModeUsers.set(chatId, { text });
-
-    // Create keyboard with popular languages in 2 columns
-    const keyboard = [];
-    for (let i = 0; i < popularLanguages.length; i += 2) {
-        const row = [];
-        row.push({
-            text: popularLanguages[i][0],
-            callback_data: `translate_${popularLanguages[i][1]}`
-        });
-        if (i + 1 < popularLanguages.length) {
-            row.push({
-                text: popularLanguages[i + 1][0],
-                callback_data: `translate_${popularLanguages[i + 1][1]}`
-            });
-        }
-        keyboard.push(row);
-    }
-
-    // Add "More Languages" button at the bottom
-    keyboard.push([{ 
-        text: 'More Languages', 
-        callback_data: 'translate_more' 
-    }]);
-
-    await bot.sendMessage(
-        chatId,
-        'Select target language:',
-        {
-            reply_markup: {
-                inline_keyboard: keyboard
-            }
-        }
-    );
-};
-
-const HELP_MESSAGE = `*Nite Live Translate*
-
-I. Direct Translation:
-/trans en Hello World, 
-/trns English Bonjour le monde, 
-/translate german こんにちは
-
-II. Quick Translation:
-/trans Hello World
-Shows a list of popular languages to choose from.
-
-Source language is automatically detected`;
-
 export function setupTranslateCommand(bot) {
+    // Track users in translation mode
+    const translateModeUsers = new Map();
+
+    // When language parameter is invalid or not provided, show quick language selection
+    const showLanguageSelectionMenu = async (chatId, text) => {
+        // Store the text to translate
+        translateModeUsers.set(chatId, { text });
+
+        // Popular languages in 2 columns
+        const popularLanguages = [
+            ['English', 'en'],
+            ['Spanish', 'es'],
+            ['Chinese', 'zh'],
+            ['Japanese', 'ja'],
+            ['Russian', 'ru'],
+            ['German', 'de'],
+            ['Italian', 'it'],
+            ['Hindi', 'hi']
+        ];
+
+        const keyboard = [];
+        for (let i = 0; i < popularLanguages.length; i += 2) {
+            const row = [];
+            row.push({
+                text: popularLanguages[i][0],
+                callback_data: `translate_${popularLanguages[i][1]}`
+            });
+            if (i + 1 < popularLanguages.length) {
+                row.push({
+                    text: popularLanguages[i + 1][0],
+                    callback_data: `translate_${popularLanguages[i + 1][1]}`
+                });
+            }
+            keyboard.push(row);
+        }
+
+        await bot.sendMessage(
+            chatId,
+            `Select a language or type any language name:
+
+*Text to translate:*
+${text}
+
+Examples: Korean, Arabic, Portuguese, Vietnamese, etc.`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: keyboard
+                }
+            }
+        );
+    };
+
     // Handle /translate or /trns command
     bot.onText(/\/(translate|trns|trans)(?:\s+([a-zA-Z]+)\s+)?(.+)?/, async (msg, match) => {
         const chatId = msg.chat.id;
@@ -185,73 +172,68 @@ export function setupTranslateCommand(bot) {
         if (!targetLangInput && !text) {
             await bot.sendMessage(
                 chatId,
-                HELP_MESSAGE,
+                `*Nite Live Translate*
+
+Direct Translation:
+/trans en Hello World, /trns English Bonjour le monde, /translate german こんにちは
+
+Quick Translation:
+/trans Hello World
+Shows a list of popular languages to choose from.
+
+Source language is automatically detected`,
                 { parse_mode: 'Markdown' }
             );
             return;
         }
 
-        // If we have text but no language, show language selection
+        // If we have text but no language, show language selection menu
         if (!targetLangInput && text) {
-            translateModeUsers.set(chatId, { text });
-            await bot.sendMessage(
-                chatId,
-                '🎯 *Select target language:*\n\n' +
-                `_Text to translate:_\n${text}`,
-                {
-                    parse_mode: 'Markdown',
-                    reply_markup: getLanguageKeyboard()
-                }
-            );
+            await showLanguageSelectionMenu(chatId, text);
             return;
         }
 
         // Direct translation with language parameter
         if (targetLangInput && text) {
-            // Find the language code from input
-            const targetLang = Object.entries(SUPPORTED_LANGUAGES)
-                .find(([code, name]) => 
-                    code === targetLangInput || 
-                    name.toLowerCase() === targetLangInput ||
-                    code === targetLangInput.substring(0, 2)
-                )?.[0];
-
-            if (!targetLang || targetLang === 'auto') {
-                await showQuickLanguageSelection(bot, chatId, text);
-                return;
-            }
-
-            // Show translation in progress
-            const statusMessage = await bot.sendMessage(
-                chatId,
-                '🔄 *Translating...*',
-                { parse_mode: 'Markdown' }
-            );
-
             try {
-                const result = await translateWithFallback(text, targetLang);
-                const sourceLangName = SUPPORTED_LANGUAGES[result.detectedSourceLang] || result.detectedSourceLang;
-                const targetLangName = SUPPORTED_LANGUAGES[targetLang];
-
-                await bot.editMessageText(
-                    `🔤 *Original* (${sourceLangName}):\n${text}\n\n` +
-                    `🌐 *Translation* (${targetLangName}):\n${result.translated}`,
+                const result = await translateWithFallback(text, targetLangInput);
+                await bot.sendMessage(
+                    chatId,
+                    `*Original*: ${text}\n\n*Translation*: ${result.translated}`,
                     {
-                        chat_id: chatId,
-                        message_id: statusMessage.message_id,
                         parse_mode: 'Markdown',
                         reply_markup: getTranslateAnotherKeyboard()
                     }
                 );
             } catch (error) {
-                console.error('Translation error:', error);
-                await bot.editMessageText(
-                    '❌ Sorry, translation failed. Please try again later.',
+                await showLanguageSelectionMenu(chatId, text);
+            }
+        }
+    });
+
+    // Handle custom language input
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const session = translateModeUsers.get(chatId);
+        
+        // Only process if user is in translation mode and message is text
+        if (session?.text && msg.text && !msg.text.startsWith('/')) {
+            try {
+                const result = await translateWithFallback(session.text, msg.text.toLowerCase());
+                await bot.sendMessage(
+                    chatId,
+                    `*Original*: ${session.text}\n\n*Translation*: ${result.translated}`,
                     {
-                        chat_id: chatId,
-                        message_id: statusMessage.message_id,
-                        parse_mode: 'Markdown'
+                        parse_mode: 'Markdown',
+                        reply_markup: getTranslateAnotherKeyboard()
                     }
+                );
+                translateModeUsers.delete(chatId);
+            } catch (error) {
+                await bot.sendMessage(
+                    chatId,
+                    'Translation failed. Please try a different language name.',
+                    { parse_mode: 'Markdown' }
                 );
             }
         }
