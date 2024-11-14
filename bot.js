@@ -19,6 +19,7 @@ import { setupScheduler } from './services/schedulerService.js';
 import { getFact } from './commands/factCommand.js';
 import { fetchJoke } from './commands/jokeCommand.js';
 import { getMemeFromReddit } from './commands/memeCommand.js';
+import { setupMovieCommand } from './commands/movieCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -281,3 +282,6 @@ function setupBotConnection() {
 }
 
 setupScheduler(bot);
+
+// Add this line with your other command setups
+setupMovieCommand(bot);
