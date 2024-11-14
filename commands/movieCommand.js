@@ -40,24 +40,15 @@ function formatMovieInfo(movie) {
     const basicInfo = `📀 𝖳𝗂𝗍𝗅𝖾 : ${movie.Title}
 
 🌟 𝖱𝖺𝗍𝗂𝗇𝗀 : ${movie.imdbRating || 'N/A'}/10
-🗳️ 𝖵𝗈𝗍𝖾𝗌 : ${movie.imdbVotes || 'N/A'}
 📆 𝖱𝖾𝗅𝖾𝖺𝗌𝖾 : ${movie.Released || 'N/A'}
 🎭 𝖦𝖾𝗇𝗋𝖾 : ${movie.Genre || 'N/A'}
 🔊 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 : ${movie.Language || 'N/A'}
-🌐 𝖢𝗈𝗎𝗇𝗍𝗋𝗒 : ${movie.Country || 'N/A'}
 🎥 𝖣𝗂𝗋𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
-📝 𝖶𝗋𝗂𝗍𝖾𝗋𝗌 : ${movie.Writer || 'N/A'}
-🔆 𝖲𝗍𝖺𝗋𝗌 : ${movie.Actors || 'N/A'}`;
+🔆 𝖲𝗍𝖺𝗋𝗌 : ${movie.Actors || 'N/A'}
 
-    // If there's no plot, return just the basic info
-    if (!movie.Plot) {
-        return `${basicInfo}\n\n🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : No plot available`;
-    }
+🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : ${movie.Plot || 'No plot available'}`;
 
-    // Get the short plot from the API
-    const shortPlot = movie.Plot.split('.')[0] + '.';
-
-    return `${basicInfo}\n\n🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : ${shortPlot}`;
+    return basicInfo;
 }
 
 async function sendMovieInfo(bot, chatId, movieInfo) {
@@ -76,10 +67,30 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
         }
     } catch (error) {
         console.error('Error sending movie info:', error);
-        await bot.sendMessage(
-            chatId,
-            '❌ Error displaying movie information. Please try again.'
-        );
+        
+        // If caption is too long, try sending with shorter plot
+        if (error.message.includes('caption is too long')) {
+            const shortPlot = movieInfo.Plot.split('.')[0] + '.';
+            movieInfo.Plot = shortPlot;
+            
+            const formattedInfo = formatMovieInfo(movieInfo);
+            
+            if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
+                await bot.sendPhoto(chatId, movieInfo.Poster, {
+                    caption: formattedInfo,
+                    parse_mode: 'Markdown'
+                });
+            } else {
+                await bot.sendMessage(chatId, formattedInfo, {
+                    parse_mode: 'Markdown'
+                });
+            }
+        } else {
+            await bot.sendMessage(
+                chatId,
+                '❌ Error displaying movie information. Please try again.'
+            );
+        }
     }
 }
 
