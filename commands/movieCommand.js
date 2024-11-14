@@ -4,12 +4,12 @@ import axios from 'axios';
 const movieCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-async function fetchMovieInfo(title) {
+async function fetchMovieInfo(query, isImdbId = false) {
     try {
         const response = await axios.get(`http://www.omdbapi.com/`, {
             params: {
                 apikey: process.env.OMDB_API_KEY,
-                t: title,
+                [isImdbId ? 'i' : 't']: query, // Use 'i' for IMDb ID, 't' for title
                 plot: 'short'
             }
         });
@@ -74,32 +74,24 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
 }
 
 export function setupMovieCommand(bot) {
-    // Handle /movie or /mv command
+    // Handle /movie or /mv command with either title or IMDb ID
     bot.onText(/\/(movie|mv)(?:\s+(.+))?/, async (msg, match) => {
         const chatId = msg.chat.id;
-        const movieTitle = match[2]?.trim();
+        const searchQuery = match[2]?.trim();
 
-        if (!movieTitle) {
+        if (!searchQuery) {
             await bot.sendMessage(
                 chatId,
                 `*Movie Information Search* 🎬\n\n` +
-                `Search for movie details using:\n` +
+                `Search by title or IMDb ID:\n` +
                 `• /movie <title>\n` +
-                `• /mv <title>\n\n` +
+                `• /mv <imdb_id>\n\n` +
                 `Examples:\n` +
                 `\`/movie The Matrix\`\n` +
-                `\`/mv Inception\``,
+                `\`/mv tt0133093\`\n` +
+                `\`/movie tt16366836\``,
                 { parse_mode: 'Markdown' }
             );
-            return;
-        }
-
-        // Check cache first
-        const cacheKey = movieTitle.toLowerCase();
-        const cachedResult = movieCache.get(cacheKey);
-        
-        if (cachedResult && (Date.now() - cachedResult.timestamp) < CACHE_DURATION) {
-            await sendMovieInfo(bot, chatId, cachedResult.data);
             return;
         }
 
@@ -111,10 +103,13 @@ export function setupMovieCommand(bot) {
         );
 
         try {
-            const movieInfo = await fetchMovieInfo(movieTitle);
+            // Check if the input is an IMDb ID (starts with 'tt' followed by numbers)
+            const isImdbId = /^tt\d+$/.test(searchQuery);
+            
+            const movieInfo = await fetchMovieInfo(searchQuery, isImdbId);
             
             // Cache the result
-            movieCache.set(cacheKey, {
+            movieCache.set(searchQuery.toLowerCase(), {
                 data: movieInfo,
                 timestamp: Date.now()
             });
