@@ -46,7 +46,7 @@ function formatMovieInfo(movie) {
 🎥 𝖣𝗂𝗋𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
 🔆 𝖲𝗍𝖺𝗋𝗌 : ${movie.Actors || 'N/A'}
 
-🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : ${movie.Plot || 'No plot available'}`;
+🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : <code>${movie.Plot || 'No plot available'}</code>`;
 
     return basicInfo;
 }
@@ -58,11 +58,11 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
         if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
             await bot.sendPhoto(chatId, movieInfo.Poster, {
                 caption: formattedInfo,
-                parse_mode: 'Markdown'
+                parse_mode: 'HTML'
             });
         } else {
             await bot.sendMessage(chatId, formattedInfo, {
-                parse_mode: 'Markdown'
+                parse_mode: 'HTML'
             });
         }
     } catch (error) {
@@ -78,11 +78,11 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
             if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
                 await bot.sendPhoto(chatId, movieInfo.Poster, {
                     caption: formattedInfo,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'HTML'
                 });
             } else {
                 await bot.sendMessage(chatId, formattedInfo, {
-                    parse_mode: 'Markdown'
+                    parse_mode: 'HTML'
                 });
             }
         } else {
