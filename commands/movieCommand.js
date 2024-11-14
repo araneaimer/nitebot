@@ -4,6 +4,17 @@ import axios from 'axios';
 const movieCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
+// Add TMDb API configuration
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+// Add cache to store which movie an actor was viewed from
+const actorMovieCache = new Map();
+
+// At the top with other constants
+const movieTitleCache = new Map(); // Cache to store movie titles by message ID
+
 async function fetchMovieInfo(query, isImdbId = false) {
     try {
         const response = await axios.get(`http://www.omdbapi.com/`, {
@@ -39,6 +50,9 @@ function formatMovieInfo(movie) {
     // Create IMDb URL from movie ID
     const imdbUrl = `https://www.imdb.com/title/${movie.imdbID}`;
     
+    // Format actors list (remove the clickable links since we're using inline buttons)
+    const actorsFormatted = movie.Actors;
+    
     // Create basic info with fancy unicode characters and HTML formatting
     const basicInfo = `📀 𝖳𝗂𝗍𝗅𝖾 : <a href="${imdbUrl}">${movie.Title}</a>
 
@@ -47,7 +61,7 @@ function formatMovieInfo(movie) {
 🎭 𝖦𝖾𝗇𝗋𝖾 : ${movie.Genre || 'N/A'}
 🔊 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 : ${movie.Language || 'N/A'}
 🎥 𝖣𝗂𝗋𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
-🔆 𝖲𝗍𝖺𝗋𝗌 : ${movie.Actors || 'N/A'}
+🔆 𝖲𝗍𝖺𝗋𝗌 : ${actorsFormatted}
 
 🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : <code>${movie.Plot || 'No plot available'}</code>`;
 
@@ -57,17 +71,43 @@ function formatMovieInfo(movie) {
 async function sendMovieInfo(bot, chatId, movieInfo) {
     try {
         const formattedInfo = formatMovieInfo(movieInfo);
+        
+        // Create inline keyboard with actor buttons
+        const actorButtons = movieInfo.Actors.split(', ').map(actor => ({
+            text: actor,
+            callback_data: `actor:${actor}`
+        }));
+        
+        // Arrange buttons in rows of 2
+        const keyboard = {
+            inline_keyboard: actorButtons.reduce((rows, button, index) => {
+                if (index % 2 === 0) {
+                    rows.push([button]);
+                } else {
+                    rows[rows.length - 1].push(button);
+                }
+                return rows;
+            }, [])
+        };
 
+        // Send message and store the message ID with movie title
+        let sentMessage;
         if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
-            await bot.sendPhoto(chatId, movieInfo.Poster, {
+            sentMessage = await bot.sendPhoto(chatId, movieInfo.Poster, {
                 caption: formattedInfo,
-                parse_mode: 'HTML'
+                parse_mode: 'HTML',
+                reply_markup: keyboard
             });
         } else {
-            await bot.sendMessage(chatId, formattedInfo, {
-                parse_mode: 'HTML'
+            sentMessage = await bot.sendMessage(chatId, formattedInfo, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard
             });
         }
+        
+        // Store the movie title with the message ID
+        movieTitleCache.set(sentMessage.message_id, movieInfo.Title);
+        
     } catch (error) {
         console.error('Error sending movie info:', error);
         
@@ -95,6 +135,71 @@ async function sendMovieInfo(bot, chatId, movieInfo) {
             );
         }
     }
+}
+
+// Function to search actor in TMDb
+async function fetchActorInfo(actorName) {
+    try {
+        // Verify API key exists
+        if (!TMDB_API_KEY) {
+            throw new Error('TMDb API key is not configured');
+        }
+
+        // First search for the actor
+        const searchResponse = await axios.get(`${TMDB_BASE_URL}/search/person`, {
+            params: {
+                api_key: TMDB_API_KEY,
+                query: actorName,
+                language: 'en-US'
+            }
+        });
+
+        if (!searchResponse.data.results.length) {
+            throw new Error('Actor not found');
+        }
+
+        // Get detailed actor info
+        const actorId = searchResponse.data.results[0].id;
+        const detailsResponse = await axios.get(`${TMDB_BASE_URL}/person/${actorId}`, {
+            params: {
+                api_key: TMDB_API_KEY
+            }
+        });
+
+        return {
+            name: detailsResponse.data.name,
+            biography: detailsResponse.data.biography || 'No biography available',
+            birthday: detailsResponse.data.birthday || 'Unknown',
+            place_of_birth: detailsResponse.data.place_of_birth || 'Unknown',
+            profile_path: detailsResponse.data.profile_path ? 
+                `${TMDB_IMAGE_BASE}${detailsResponse.data.profile_path}` : null
+        };
+    } catch (error) {
+        console.error('Error fetching actor info:', error);
+        throw error;
+    }
+}
+
+function formatActorInfo(actor) {
+    // Truncate biography to fit within Telegram's caption limit
+    const maxBioLength = 700; // Leave room for other fields and formatting
+    let biography = actor.biography;
+    if (biography.length > maxBioLength) {
+        // Find the last complete sentence within the limit
+        biography = biography.substring(0, maxBioLength);
+        const lastPeriod = biography.lastIndexOf('.');
+        if (lastPeriod > 0) {
+            biography = biography.substring(0, lastPeriod + 1);
+        }
+    }
+
+    return `🎭 ${actor.name}
+
+🎂 Birthday: ${actor.birthday}
+📍 Place of Birth: ${actor.place_of_birth}
+
+📝 Biography:
+${biography}`;
 }
 
 export function setupMovieCommand(bot) {
@@ -152,6 +257,146 @@ export function setupMovieCommand(bot) {
                     message_id: loadingMsg.message_id
                 }
             );
+        }
+    });
+
+    // Modify the existing bot.on('callback_query') handler
+    bot.on('callback_query', async (query) => {
+        const chatId = query.message.chat.id;
+        const messageId = query.message.message_id;
+
+        if (query.data.startsWith('actor:')) {
+            const actorName = query.data.replace('actor:', '');
+            
+            try {
+                // Get movie title from cache using message ID
+                const movieTitle = movieTitleCache.get(messageId);
+                if (!movieTitle) {
+                    throw new Error('Movie information not found');
+                }
+
+                // Store in actor-movie cache
+                actorMovieCache.set(actorName, movieTitle);
+
+                // Show loading message
+                await bot.editMessageCaption('🔍 Fetching actor information...', {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'HTML'
+                });
+
+                const actorInfo = await fetchActorInfo(actorName);
+                let formattedInfo = formatActorInfo(actorInfo);
+
+                // If still too long, use a more aggressive truncation
+                if (formattedInfo.length > 1024) {
+                    const maxBioLength = 300;
+                    let biography = actorInfo.biography;
+                    biography = biography.substring(0, maxBioLength) + '...\n[Biography truncated]';
+                    formattedInfo = `🎭 ${actorInfo.name}
+
+🎂 Birthday: ${actorInfo.birthday}
+📍 Place of Birth: ${actorInfo.place_of_birth}
+
+📝 Biography:
+${biography}`;
+                }
+
+                // Update message with actor info
+                if (actorInfo.profile_path) {
+                    await bot.editMessageMedia({
+                        type: 'photo',
+                        media: actorInfo.profile_path,
+                        caption: formattedInfo,
+                        parse_mode: 'HTML'
+                    }, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { text: '« Back to Movie', callback_data: `back_to_movie:${actorName}` }
+                            ]]
+                        }
+                    });
+                } else {
+                    await bot.editMessageCaption(formattedInfo, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [[
+                                { text: '« Back to Movie', callback_data: `back_to_movie:${actorName}` }
+                            ]]
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error in callback query:', error);
+                await bot.answerCallbackQuery(query.id, {
+                    text: '❌ Failed to fetch actor information: ' + error.message,
+                    show_alert: true
+                });
+            }
+        } else if (query.data.startsWith('back_to_movie:')) {
+            try {
+                // Get actor name from callback data
+                const actorName = query.data.replace('back_to_movie:', '');
+                // Get movie title from cache
+                const movieTitle = actorMovieCache.get(actorName);
+                
+                if (!movieTitle) {
+                    throw new Error('Movie information not found');
+                }
+
+                // Get the movie info
+                const movieInfo = await fetchMovieInfo(movieTitle);
+                const formattedInfo = formatMovieInfo(movieInfo);
+                
+                // Create actor buttons
+                const actorButtons = movieInfo.Actors.split(', ').map(actor => ({
+                    text: actor,
+                    callback_data: `actor:${actor}`
+                }));
+                
+                // Arrange buttons in rows of 2
+                const keyboard = {
+                    inline_keyboard: actorButtons.reduce((rows, button, index) => {
+                        if (index % 2 === 0) {
+                            rows.push([button]);
+                        } else {
+                            rows[rows.length - 1].push(button);
+                        }
+                        return rows;
+                    }, [])
+                };
+
+                // Update message with movie info
+                if (movieInfo.Poster && movieInfo.Poster !== 'N/A') {
+                    await bot.editMessageMedia({
+                        type: 'photo',
+                        media: movieInfo.Poster,
+                        caption: formattedInfo,
+                        parse_mode: 'HTML'
+                    }, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        reply_markup: keyboard
+                    });
+                } else {
+                    await bot.editMessageCaption(formattedInfo, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: 'HTML',
+                        reply_markup: keyboard
+                    });
+                }
+            } catch (error) {
+                console.error('Error returning to movie:', error);
+                await bot.answerCallbackQuery(query.id, {
+                    text: '❌ Failed to return to movie information: ' + error.message,
+                    show_alert: true
+                });
+            }
         }
     });
 } 
