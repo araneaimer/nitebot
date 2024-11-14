@@ -49,8 +49,8 @@ export function setupImageCommand(bot) {
     });
 
     bot.onText(/\/(imagine|im|image) (.+)/, async (msg, match) => {
-        // const chatId = msg.chat.id;
-        // const prompt = match[2];
+        const chatId = msg.chat.id;
+        const prompt = match[2];
         
         console.log(`Received imagine command with prompt: "${prompt}"`);
         
