@@ -84,29 +84,49 @@ class LLMService {
 
     async sendResponse(bot, chatId, response) {
         try {
-            // First attempt: Try sending with Markdown
-            if (response.length <= 4096) {
+            // First convert Gemini's markdown to Telegram's MarkdownV2 format
+            let formattedResponse = response
+                // First escape any existing backslashes
+                .replace(/\\/g, '\\\\')
+                // Then escape special characters except those used in markdown
+                .replace(/([[\]()>#+\-=|{}.!])/g, '\\$1')
+                // Convert **text** to *text* for bold (do this after escaping special chars)
+                .replace(/\*\*(.+?)\*\*/g, '*$1*')
+                // Convert _text_ to _text_ for italic
+                .replace(/\_(.+?)\_/g, '_$1_')
+                // Convert ```text``` to `text` for code
+                .replace(/```(.+?)```/g, '`$1`');
+
+            // Split and send long messages
+            if (formattedResponse.length <= 4096) {
                 try {
-                    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+                    await bot.sendMessage(chatId, formattedResponse, { 
+                        parse_mode: 'MarkdownV2'
+                    });
                 } catch (markdownError) {
-                    // If Markdown fails, send without parsing
+                    console.error('Markdown parsing error:', markdownError);
+                    console.error('Formatted response:', formattedResponse);
+                    // If MarkdownV2 fails, send without parsing
                     await bot.sendMessage(chatId, response);
                 }
             } else {
                 // Split long responses
-                for (let i = 0; i < response.length; i += 4096) {
-                    const chunk = response.substring(i, Math.min(response.length, i + 4096));
+                for (let i = 0; i < formattedResponse.length; i += 4096) {
+                    const chunk = formattedResponse.substring(i, Math.min(formattedResponse.length, i + 4096));
                     try {
-                        await bot.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+                        await bot.sendMessage(chatId, chunk, { 
+                            parse_mode: 'MarkdownV2'
+                        });
                     } catch (markdownError) {
-                        // If Markdown fails, send without parsing
-                        await bot.sendMessage(chatId, chunk);
+                        console.error('Markdown parsing error:', markdownError);
+                        // If MarkdownV2 fails, send without parsing
+                        await bot.sendMessage(chatId, response.substring(i, Math.min(response.length, i + 4096)));
                     }
                 }
             }
         } catch (error) {
             console.error('Error sending response:', error);
-            await bot.sendMessage(chatId, '❌ Sorry, I encountered an error while processing your request.');
+            await bot.sendMessage(chatId, '❌ Sorry, I encountered an error while processing your request\\.');
         }
     }
 
