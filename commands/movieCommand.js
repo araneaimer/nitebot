@@ -9,13 +9,23 @@ async function fetchMovieInfo(query, isImdbId = false) {
         const response = await axios.get(`http://www.omdbapi.com/`, {
             params: {
                 apikey: process.env.OMDB_API_KEY,
-                [isImdbId ? 'i' : 't']: query, // Use 'i' for IMDb ID, 't' for title
+                [isImdbId ? 'i' : 't']: query,
                 plot: 'short'
             }
         });
 
         if (response.data.Response === 'False') {
             throw new Error(response.data.Error || 'Movie not found');
+        }
+
+        // If movie has a poster, get high resolution version
+        if (response.data.Poster && response.data.Poster !== 'N/A') {
+            // The default OMDB poster URLs are in this format:
+            // https://m.media-amazon.com/images/M/[image_id].jpg
+            // We can modify it to get higher resolution by changing the end part
+            response.data.Poster = response.data.Poster
+                .replace('_SX300', '_SX1500')  // Increase width to 1500
+                .replace('_SY300', '_SY2000'); // Increase height to 2000
         }
 
         return response.data;
