@@ -76,7 +76,6 @@ I am a versatile personal assistant bot currently under development.`;
                 '/mm programmerhumor - Get memes from r/programmerhumor'
             ],
             category: 'Entertainment',
-            note: '\nUse /meme list to see available subreddits. Default subreddit: memes'
         },
         {
             command: '/joke, /jk',
@@ -95,6 +94,18 @@ I am a versatile personal assistant bot currently under development.`;
             ],
             category: 'Utilities',
             note: '\nSend a voice message after activating transcription mode. Use the Cancel button to exit the mode.'
+        },
+        {
+            command: '/movie, /mv',
+            description: 'Search for movie information with details and high-quality posters',
+            usage: '/movie <title or IMDb ID>',
+            examples: [
+                '/movie The Matrix - Search by movie title',
+                '/mv tt0133093 - Search by IMDb ID',
+                '/movie The Matrix'
+            ],
+            category: 'Entertainment',
+            note: '\nClicking on the movie title opens its IMDb page. The storyline text is copyable.'
         }
     ];
 
