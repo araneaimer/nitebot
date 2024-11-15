@@ -23,7 +23,7 @@ import { setupMovieCommand } from './commands/movieCommand.js';
 import { setupTranslateCommand } from './commands/translateCommand.js';
 import { validateEnvironment } from './config/validateEnv.js';
 import { rateLimitService } from './services/rateLimitService.js';
-import { setupYoutubeCommand } from './commands/youtubeCommand.js';
+import { setupDownloadCommand } from './commands/downloadCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -240,7 +240,6 @@ const commandLimits = {
     translate: { requests: 10, window: 60000 },
     movie: { requests: 10, window: 60000 },
     voice: { requests: 3, window: 60000 },
-    youtube: { requests: 3, window: 60000 },
     default: { requests: 15, window: 60000 }
 };
 
@@ -259,7 +258,6 @@ function setupCommandsWithRateLimits() {
         { setup: setupSubscribeCommand, name: 'subscribe' },
         { setup: setupMovieCommand, name: 'movie' },
         { setup: setupTranslateCommand, name: 'translate' },
-        { setup: setupYoutubeCommand, name: 'youtube' }
     ];
 
     commands.forEach(({ setup, name }) => {
@@ -382,3 +380,5 @@ function setupGracefulShutdown(bot) {
 }
 
 setupGracefulShutdown(bot);
+
+setupDownloadCommand(bot);
