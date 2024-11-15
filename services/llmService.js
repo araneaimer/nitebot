@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { rateLimitService } from './rateLimitService';
+import { rateLimitService } from './rateLimitService.js';
 
 class LLMService {
     constructor() {

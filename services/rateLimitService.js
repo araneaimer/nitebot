@@ -1,91 +1,79 @@
 class RateLimitService {
     constructor() {
-        this.limits = new Map();
+        this.userLimits = new Map();
         this.globalLimits = new Map();
-        this.requestCounts = new Map();
-        this.lastRequestTime = new Map();
-        
-        // Cleanup old entries every minute
-        setInterval(() => this.cleanup(), 60000);
+        this.LLM_MAX_REQUESTS = 20;  // 20 requests per minute per user
+        this.LLM_TIME_WINDOW = 60000; // 1 minute in milliseconds
     }
 
-    check(userId, action, limit = 5, window = 60000) {
+    check(userId, action, maxRequests, timeWindow) {
         const key = `${userId}:${action}`;
         const now = Date.now();
-        const userLimits = this.limits.get(key) || [];
-        
-        // Clean old entries for this specific user/action
-        const validCalls = userLimits.filter(time => now - time < window);
-        
-        if (validCalls.length >= limit) {
+        const userRequests = this.userLimits.get(key) || [];
+
+        // Remove expired timestamps
+        const validRequests = userRequests.filter(timestamp => now - timestamp < timeWindow);
+
+        if (validRequests.length >= maxRequests) {
             return false;
         }
-        
-        validCalls.push(now);
-        this.limits.set(key, validCalls);
+
+        // Add new request timestamp
+        validRequests.push(now);
+        this.userLimits.set(key, validRequests);
         return true;
     }
 
-    checkGlobal(action, limit = 60, window = 60000) {
+    checkGlobal(action, maxRequests, timeWindow) {
         const now = Date.now();
-        const calls = this.globalLimits.get(action) || [];
-        
-        // Clean old entries
-        const validCalls = calls.filter(time => now - time < window);
-        
-        if (validCalls.length >= limit) {
+        const globalRequests = this.globalLimits.get(action) || [];
+
+        // Remove expired timestamps
+        const validRequests = globalRequests.filter(timestamp => now - timestamp < timeWindow);
+
+        if (validRequests.length >= maxRequests) {
             return false;
         }
-        
-        validCalls.push(now);
-        this.globalLimits.set(action, validCalls);
+
+        // Add new request timestamp
+        validRequests.push(now);
+        this.globalLimits.set(action, validRequests);
         return true;
     }
 
-    // Add LLM-specific rate limiting
     checkLLM(chatId) {
-        const now = Date.now();
-        const minute = Math.floor(now / 60000);
-
-        if (!this.requestCounts.has(minute)) {
-            this.requestCounts.clear();
-            this.requestCounts.set(minute, 0);
-        }
-
-        const requestsThisMinute = this.requestCounts.get(minute);
-        if (requestsThisMinute >= 60) return false;
-
-        const lastRequest = this.lastRequestTime.get(chatId) || 0;
-        if (now - lastRequest < 333) return false;
-
-        this.requestCounts.set(minute, requestsThisMinute + 1);
-        this.lastRequestTime.set(chatId, now);
-        return true;
+        return this.check(chatId, 'llm', this.LLM_MAX_REQUESTS, this.LLM_TIME_WINDOW);
     }
 
+    // Clean up old entries periodically
     cleanup() {
         const now = Date.now();
-        
-        // Cleanup user-specific limits
-        for (const [key, times] of this.limits.entries()) {
-            const validTimes = times.filter(time => now - time < 60000);
-            if (validTimes.length === 0) {
-                this.limits.delete(key);
+
+        // Cleanup user limits
+        for (const [key, timestamps] of this.userLimits.entries()) {
+            const validTimestamps = timestamps.filter(ts => now - ts < 3600000); // 1 hour
+            if (validTimestamps.length === 0) {
+                this.userLimits.delete(key);
             } else {
-                this.limits.set(key, validTimes);
+                this.userLimits.set(key, validTimestamps);
             }
         }
-        
+
         // Cleanup global limits
-        for (const [action, times] of this.globalLimits.entries()) {
-            const validTimes = times.filter(time => now - time < 60000);
-            if (validTimes.length === 0) {
+        for (const [action, timestamps] of this.globalLimits.entries()) {
+            const validTimestamps = timestamps.filter(ts => now - ts < 3600000); // 1 hour
+            if (validTimestamps.length === 0) {
                 this.globalLimits.delete(action);
             } else {
-                this.globalLimits.set(action, validTimes);
+                this.globalLimits.set(action, validTimestamps);
             }
         }
     }
 }
 
-export const rateLimitService = new RateLimitService(); 
+export const rateLimitService = new RateLimitService();
+
+// Run cleanup every hour
+setInterval(() => {
+    rateLimitService.cleanup();
+}, 3600000); 
