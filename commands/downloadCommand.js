@@ -11,9 +11,9 @@ const execAsync = promisify(exec);
 
 // Supported quality options for video downloads
 const QUALITY_OPTIONS = {
-    'best': '🎯 Best Quality',
-    'medium': '📊 Medium Quality (480p)',
-    'low': '📱 Low Quality (360p)'
+    'best': '🎯 Best (1080p)',
+    'medium': '📊 Medium (480p)',
+    'low': '📱 Low (360p)'
 };
 
 // Size limit for Telegram uploads (50MB in bytes)
@@ -88,10 +88,16 @@ _Note: Please wait for each download to complete before starting another._`;
 
             // Create quality selection buttons
             const keyboard = {
-                inline_keyboard: Object.entries(QUALITY_OPTIONS).map(([quality, label]) => [{
-                    text: label,
-                    callback_data: `dl:${quality}:${urlHash}`
-                }])
+                inline_keyboard: [
+                    ...Object.entries(QUALITY_OPTIONS).map(([quality, label]) => [{
+                        text: label,
+                        callback_data: `dl:${quality}:${urlHash}`
+                    }]),
+                    [{
+                        text: '❌ Cancel',
+                        callback_data: `dl:cancel:${urlHash}`
+                    }]
+                ]
             };
 
             // Send quality selection message
@@ -120,6 +126,16 @@ _Note: Please wait for each download to complete before starting another._`;
         const userId = query.from.id;
         const [action, quality, urlHash] = query.data.split(':');
 
+        if (action === 'dl' && quality === 'cancel') {
+            await bot.deleteMessage(chatId, query.message.message_id);
+            await bot.answerCallbackQuery(query.id, {
+                text: 'Download cancelled',
+                show_alert: false
+            });
+            urlCache.delete(urlHash);
+            return;
+        }
+
         if (action !== 'dl') return;
 
         if (downloadingUsers.has(userId)) {
@@ -137,6 +153,11 @@ _Note: Please wait for each download to complete before starting another._`;
             if (!url) {
                 throw new Error('Download link expired. Please try again.');
             }
+
+            // Get video info first
+            const { stdout: info } = await execAsync(`yt-dlp --dump-json "${url}"`);
+            const videoInfo = JSON.parse(info);
+            const videoTitle = videoInfo.title || 'Untitled Video';
 
             // Acknowledge the button press
             await bot.answerCallbackQuery(query.id);
@@ -230,7 +251,8 @@ _Note: Please wait for each download to complete before starting another._`;
                 );
 
                 await bot.sendVideo(chatId, fileStream, {
-                    caption: `🎥 Downloaded in ${QUALITY_OPTIONS[quality].toLowerCase()}`,
+                    caption: `🎥 *${QUALITY_OPTIONS[quality].match(/\(([^)]+)\)/)[1]}*: ${videoTitle}`,
+                    parse_mode: 'Markdown',
                     reply_to_message_id: query.message.message_id
                 });
 
