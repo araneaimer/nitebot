@@ -21,11 +21,11 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 // Helper function to create a progress bar
 function createProgressBar(progress) {
-    const barLength = 10;
+    const barLength = 20;
     const filledLength = Math.round((progress * barLength) / 100);
     const filled = '■'.repeat(filledLength);
     const empty = '□'.repeat(barLength - filledLength);
-    return `[${filled}${empty}]`;
+    return `[${filled}${empty}] ${progress.toFixed(1)}%`;
 }
 
 // Helper function to format file size
@@ -164,7 +164,7 @@ _Note: Please wait for each download to complete before starting another._`;
             
             // Update original message to show progress
             const statusMessage = await bot.editMessageText(
-                '🔍 Fetching video information...',
+                'Fetching video information...',
                 {
                     chat_id: chatId,
                     message_id: query.message.message_id
@@ -204,7 +204,7 @@ _Note: Please wait for each download to complete before starting another._`;
                             lastProgress = progress;
                             try {
                                 await bot.editMessageText(
-                                    `📥 Downloading video...\n\n${createProgressBar(progress)} ${progress.toFixed(1)}%`,
+                                    `Downloading: ${createProgressBar(progress)}`,
                                     {
                                         chat_id: chatId,
                                         message_id: statusMessage.message_id
@@ -243,7 +243,7 @@ _Note: Please wait for each download to complete before starting another._`;
                 );
             } else {
                 await bot.editMessageText(
-                    `📤 Uploading video... (${formatFileSize(fileSize)})`,
+                    `Uploading video (${formatFileSize(fileSize)})`,
                     {
                         chat_id: chatId,
                         message_id: statusMessage.message_id
