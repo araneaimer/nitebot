@@ -69,7 +69,7 @@ export function setupTimeCommand(bot) {
         // Show instructions if no timezone specified
         if (!timezone) {
             bot.sendMessage(chatId, 
-                "Please provide a city or country name.\nExample: */time Paris*, */tm Paris* or */t Japan*", 
+                "Please provide a city or country name.\nExample: */time Paris*, */tm Paris*", 
                 { parse_mode: 'Markdown' }
             );
             return;

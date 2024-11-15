@@ -107,7 +107,7 @@ export const setupCurrencyCommand = (bot) => {
 
         if (!input) {
             const helpText = `
-*Currency Converter* 💱
+💱*Nite Currency Converter* 💱
 Convert between major currencies!
 
 *Supported Currencies:*

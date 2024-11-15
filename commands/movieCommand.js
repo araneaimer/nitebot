@@ -219,15 +219,18 @@ export function setupMovieCommand(bot) {
         if (!searchQuery) {
             await bot.sendMessage(
                 chatId,
-                `*Movie Information Search* 🎬\n\n` +
+                `🎬 *Movie Information Search*\n\n` +
                 `Search by title or IMDb ID:\n` +
-                `• /movie <title>\n` +
-                `• /mv <imdb_id>\n\n` +
+                `• \`/movie <title>\`\n` +
+                `• \`/mv <imdb_id>\`\n\n` +
                 `Examples:\n` +
-                `\`/movie The Matrix\`\n` +
-                `\`/mv tt0133093\`\n` +
-                `\`/movie tt16366836\``,
-                { parse_mode: 'Markdown' }
+                `• /movie The Matrix\n` +
+                `• /mv tt0133093\n` +
+                `• /movie tt16366836`,
+                { 
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true 
+                }
             );
             return;
         }

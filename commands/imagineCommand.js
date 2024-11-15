@@ -25,6 +25,8 @@ const generateImage = async (modelId, prompt) => {
 
 export function setupImageCommand(bot) {
     const userSessions = new Map();
+    const promptCache = new Map();
+    let promptCounter = 0;
 
     // Helper function to create model selection keyboard
     const getModelKeyboard = () => ({
@@ -34,12 +36,12 @@ export function setupImageCommand(bot) {
         }]))
     });
 
-    // Helper function to create image action buttons
-    const getImageActionButtons = (prompt) => ({
+    // Modified helper function for image action buttons
+    const getImageActionButtons = (promptId) => ({
         inline_keyboard: [[
             {
                 text: '🎲 Regenerate',
-                callback_data: `regenerate_${prompt}`
+                callback_data: `reg_${promptId}`
             },
             {
                 text: '✨ Upscale',
@@ -51,14 +53,30 @@ export function setupImageCommand(bot) {
     bot.onText(/\/(imagine|im|image) (.+)/, async (msg, match) => {
         const chatId = msg.chat.id;
         const prompt = match[2];
+        const promptId = `p${promptCounter++}`;
         
-        console.log(`Received imagine command with prompt: "${prompt}"`);
+        // Clear previous prompts for this chat
+        for (const [key, value] of promptCache.entries()) {
+            if (userSessions.get(value.chatId)?.promptId === key) {
+                promptCache.delete(key);
+                userSessions.delete(value.chatId);
+            }
+        }
+        
+        // Store new prompt with chat ID
+        promptCache.set(promptId, {
+            prompt: prompt,
+            chatId: chatId
+        });
         
         userSessions.set(chatId, {
-            prompt,
+            promptId,
+            prompt, // Add prompt directly to session
             originalMessageId: msg.message_id
         });
 
+        console.log(`Received imagine command with prompt: "${prompt}"`);
+        
         await bot.sendMessage(
             chatId,
             '🎨 Choose a model for image generation:',
@@ -73,52 +91,11 @@ export function setupImageCommand(bot) {
         const chatId = query.message.chat.id;
         const messageId = query.message.message_id;
 
-        // Handle regenerate button
-        if (query.data.startsWith('regenerate_')) {
-            const prompt = query.data.replace('regenerate_', '');
-            
-            // Store new session with original prompt
-            userSessions.set(chatId, {
-                prompt,
-                originalMessageId: query.message.reply_to_message?.message_id
-            });
-
-            await bot.sendMessage(
-                chatId,
-                '🎨 Choose a model for regeneration:',
-                { 
-                    reply_markup: getModelKeyboard(),
-                    reply_to_message_id: query.message.reply_to_message?.message_id
-                }
-            );
-            
-            try {
-                await bot.answerCallbackQuery(query.id);
-            } catch (error) {
-                console.error(`Failed to answer callback query: ${error.message}`);
-                // Continue execution since this is not a critical error
-            }
-            return;
-        }
-
-        // Handle upscale button (pending feature)
-        if (query.data === 'upscale_pending') {
-            await bot.answerCallbackQuery(query.id, {
-                text: '⚙️ Upscaling feature coming soon!',
-                show_alert: true
-            });
-            return;
-        }
-
         // Handle model selection
         if (query.data.startsWith('generate_')) {
             const modelName = query.data.replace('generate_', '');
             const modelId = MODELS[modelName];
             const session = userSessions.get(chatId);
-
-            console.log(`Starting generation with model ${modelName}`);
-            console.log(`Using prompt: "${session?.prompt}"`);
-            console.log(`Model ID: ${modelId}`);
 
             if (!session) {
                 await bot.answerCallbackQuery(query.id, {
@@ -127,6 +104,13 @@ export function setupImageCommand(bot) {
                 });
                 return;
             }
+
+            // Get prompt from session directly
+            const prompt = session.prompt;
+            
+            console.log(`Starting generation with model ${modelName}`);
+            console.log(`Using prompt: "${prompt}"`);
+            console.log(`Model ID: ${modelId}`);
 
             await bot.editMessageText(
                 `🎨 Generating image using ${modelName}...`,
@@ -139,16 +123,16 @@ export function setupImageCommand(bot) {
 
             try {
                 console.log(`Starting generation with ${modelName}...`);
-                const response = await generateImage(modelId, session.prompt);
+                const response = await generateImage(modelId, prompt);
                 
                 const buffer = Buffer.from(await response.arrayBuffer());
 
                 // Send image with regenerate and upscale buttons
                 await bot.sendPhoto(chatId, buffer, {
-                    caption: `*${modelName}*`,
+                    caption: `*${modelName}*\n\n_${prompt}_`,
                     parse_mode: 'Markdown',
                     reply_to_message_id: session.originalMessageId,
-                    reply_markup: getImageActionButtons(session.prompt)
+                    reply_markup: getImageActionButtons(session.promptId)
                 });
 
                 await bot.editMessageText(
@@ -187,7 +171,42 @@ export function setupImageCommand(bot) {
                 await bot.answerCallbackQuery(query.id);
             } catch (error) {
                 console.error(`Failed to answer callback query: ${error.message}`);
-                // Continue execution since this is not a critical error
+            }
+        }
+
+        // Handle regenerate button
+        if (query.data.startsWith('reg_')) {
+            const promptId = query.data.replace('reg_', '');
+            const promptData = promptCache.get(promptId);
+            
+            if (!promptData) {
+                await bot.answerCallbackQuery(query.id, {
+                    text: '❌ Session expired. Please start over with /imagine command.',
+                    show_alert: true
+                });
+                return;
+            }
+
+            // Store new session with original prompt
+            userSessions.set(chatId, {
+                promptId,
+                prompt: promptData.prompt,
+                originalMessageId: query.message.reply_to_message?.message_id
+            });
+
+            await bot.sendMessage(
+                chatId,
+                '🎨 Choose a model for regeneration:',
+                { 
+                    reply_markup: getModelKeyboard(),
+                    reply_to_message_id: query.message.reply_to_message?.message_id
+                }
+            );
+            
+            try {
+                await bot.answerCallbackQuery(query.id);
+            } catch (error) {
+                console.error(`Failed to answer callback query: ${error.message}`);
             }
         }
     });
