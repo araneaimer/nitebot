@@ -61,7 +61,7 @@ function formatMovieInfo(movie) {
 🎭 𝖦𝖾𝗇𝗋𝖾 : ${movie.Genre || 'N/A'}
 🔊 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 : ${movie.Language || 'N/A'}
 🎥 𝖣𝗂𝖾𝖼𝗍𝗈𝗋𝗌 : ${movie.Director || 'N/A'}
-🔆 𝗍𝖺𝗋𝗌 : ${actorsFormatted}
+🔆 S𝗍𝖺𝗋𝗌 : ${actorsFormatted}
 
 🗒 𝖲𝗍𝗈𝗋𝗒𝗅𝗂𝗇𝖾 : <code>${movie.Plot || 'No plot available'}</code>`;
 
