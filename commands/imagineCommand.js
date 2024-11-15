@@ -105,7 +105,6 @@ export function setupImageCommand(bot) {
                 return;
             }
 
-            // Get prompt from session directly
             const prompt = session.prompt;
             
             console.log(`Starting generation with model ${modelName}`);
@@ -124,24 +123,18 @@ export function setupImageCommand(bot) {
             try {
                 console.log(`Starting generation with ${modelName}...`);
                 const response = await generateImage(modelId, prompt);
-                
                 const buffer = Buffer.from(await response.arrayBuffer());
 
                 // Send image with regenerate and upscale buttons
                 await bot.sendPhoto(chatId, buffer, {
-                    caption: `*${modelName}*\n\n_${prompt}_`,
+                    caption: `*${modelName}*`,
                     parse_mode: 'Markdown',
                     reply_to_message_id: session.originalMessageId,
                     reply_markup: getImageActionButtons(session.promptId)
                 });
 
-                await bot.editMessageText(
-                    `✨ Successfully generated image using ${modelName}!`,
-                    {
-                        chat_id: chatId,
-                        message_id: messageId
-                    }
-                );
+                // Delete the "Generating..." message instead of updating it
+                await bot.deleteMessage(chatId, messageId);
 
             } catch (error) {
                 console.error(`${modelName}: ${error.message}`);
