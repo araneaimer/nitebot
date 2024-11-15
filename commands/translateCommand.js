@@ -230,9 +230,19 @@ Source language is automatically detected`,
                 );
                 translateModeUsers.delete(chatId);
             } catch (error) {
+                let errorMessage = 'Translation failed. ';
+                
+                if (error.response?.status === 429) {
+                    errorMessage += 'Rate limit exceeded. Please try again later.';
+                } else if (error.response?.status === 400) {
+                    errorMessage += 'Invalid language specified. Please try a different language name.';
+                } else {
+                    errorMessage += 'Please try again.';
+                }
+                
                 await bot.sendMessage(
                     chatId,
-                    'Translation failed. Please try a different language name.',
+                    errorMessage,
                     { parse_mode: 'Markdown' }
                 );
             }

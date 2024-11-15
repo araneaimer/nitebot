@@ -1,12 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { rateLimitService } from './rateLimitService';
 
 class LLMService {
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
         this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
         this.conversationHistory = new Map();
-        this.requestCounts = new Map(); // Track requests per minute
-        this.lastRequestTime = new Map(); // Track time between requests
     }
 
     async generateResponse(message, chatId) {
@@ -54,32 +53,7 @@ class LLMService {
     }
 
     checkRateLimit(chatId) {
-        const now = Date.now();
-        const minute = Math.floor(now / 60000);
-
-        // Initialize counters if needed
-        if (!this.requestCounts.has(minute)) {
-            this.requestCounts.clear(); // Clear old minutes
-            this.requestCounts.set(minute, 0);
-        }
-
-        // Check requests per minute (60 max)
-        const requestsThisMinute = this.requestCounts.get(minute);
-        if (requestsThisMinute >= 60) {
-            return false;
-        }
-
-        // Check requests per second (3 max)
-        const lastRequest = this.lastRequestTime.get(chatId) || 0;
-        if (now - lastRequest < 333) { // 333ms = 1000ms/3 requests
-            return false;
-        }
-
-        // Update counters
-        this.requestCounts.set(minute, requestsThisMinute + 1);
-        this.lastRequestTime.set(chatId, now);
-
-        return true;
+        return rateLimitService.checkLLM(chatId);
     }
 
     async sendResponse(bot, chatId, response) {
@@ -179,26 +153,6 @@ class LLMService {
                 isRandom: false
             };
         }
-    }
-}
-
-class RateLimiter {
-    constructor(maxRequests, timeWindow) {
-        this.requests = new Map();
-        this.maxRequests = maxRequests;
-        this.timeWindow = timeWindow;
-    }
-
-    canMakeRequest(id) {
-        const now = Date.now();
-        const userRequests = this.requests.get(id) || [];
-        const recentRequests = userRequests.filter(time => now - time < this.timeWindow);
-        
-        if (recentRequests.length >= this.maxRequests) return false;
-        
-        recentRequests.push(now);
-        this.requests.set(id, recentRequests);
-        return true;
     }
 }
 

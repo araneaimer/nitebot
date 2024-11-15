@@ -15,6 +15,19 @@ const timezoneMappings = JSON.parse(
 const activeUpdates = new Map(); // {chatId: {messageId, interval, timezone}}
 
 export function setupTimeCommand(bot) {
+    // Add cleanup function
+    function cleanupAllUpdates() {
+        for (const [chatId, update] of activeUpdates.entries()) {
+            clearInterval(update.interval);
+            activeUpdates.delete(chatId);
+        }
+    }
+
+    // Add to existing bot event handlers
+    bot.on('stop', cleanupAllUpdates);
+    process.on('SIGINT', cleanupAllUpdates);
+    process.on('SIGTERM', cleanupAllUpdates);
+
     // Clear any existing update when starting a new one
     function clearExistingUpdate(chatId) {
         const existing = activeUpdates.get(chatId);

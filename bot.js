@@ -21,9 +21,14 @@ import { fetchJoke } from './commands/jokeCommand.js';
 import { getMemeFromReddit } from './commands/memeCommand.js';
 import { setupMovieCommand } from './commands/movieCommand.js';
 import { setupTranslateCommand } from './commands/translateCommand.js';
+import { validateEnvironment } from './config/validateEnv.js';
+import { rateLimitService } from './services/rateLimitService.js';
 
 // Initialize environment variables
 dotenv.config();
+
+// Validate environment before bot initialization
+validateEnvironment();
 
 // Configure bot with modern URL parsing
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
@@ -37,6 +42,27 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const messageText = msg.text;
+    const userId = msg.from.id;
+
+    // Rate limit check for general messages
+    if (!rateLimitService.check(userId, 'message', 10, 60000)) { // 10 messages per minute
+        await bot.sendMessage(
+            chatId,
+            '⚠️ You\'re sending messages too quickly. Please wait a moment.',
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
+
+    // Global rate limit check
+    if (!rateLimitService.checkGlobal('message', 60, 60000)) { // 60 messages per minute globally
+        await bot.sendMessage(
+            chatId,
+            '⚠️ Bot is experiencing high traffic. Please try again in a moment.',
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
 
     // Ignore messages that:
     // - Start with '/' (commands)
@@ -117,7 +143,18 @@ bot.on('message', async (msg) => {
 // Add voice message handler
 bot.on('voice', async (msg) => {
     const chatId = msg.chat.id;
+    const userId = msg.from.id;
     
+    // Rate limit check for voice messages
+    if (!rateLimitService.check(userId, 'voice', 3, 60000)) { // 3 voice messages per minute
+        await bot.sendMessage(
+            chatId,
+            '⚠️ Please wait before sending more voice messages.',
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
+
     // Skip if user is in transcribe mode
     if (transcribeModeUsers.has(chatId)) return;
     
@@ -195,17 +232,40 @@ bot.on('callback_query', async (query) => {
     }
 });
 
-// Setup all commands
-setupTimeCommand(bot);
-setupHelpCommand(bot);
-setupStartCommand(bot);
-setupCurrencyCommand(bot);
-setupMemeCommand(bot);
-setupJokeCommand(bot);
-setupFactCommand(bot);
-setupImageCommand(bot);
-setupTranscribeCommand(bot);
-setupSubscribeCommand(bot);
+// Command rate limits configuration
+const commandLimits = {
+    meme: { requests: 8, window: 60000 },
+    imagine: { requests: 3, window: 60000 },
+    translate: { requests: 10, window: 60000 },
+    movie: { requests: 10, window: 60000 },
+    voice: { requests: 3, window: 60000 },
+    default: { requests: 15, window: 60000 }
+};
+
+// Setup all commands with rate limiting
+function setupCommandsWithRateLimits() {
+    const commands = [
+        { setup: setupTimeCommand, name: 'time' },
+        { setup: setupHelpCommand, name: 'help' },
+        { setup: setupStartCommand, name: 'start' },
+        { setup: setupCurrencyCommand, name: 'currency' },
+        { setup: setupMemeCommand, name: 'meme' },
+        { setup: setupJokeCommand, name: 'joke' },
+        { setup: setupFactCommand, name: 'fact' },
+        { setup: setupImageCommand, name: 'imagine' },
+        { setup: setupTranscribeCommand, name: 'voice' },
+        { setup: setupSubscribeCommand, name: 'subscribe' },
+        { setup: setupMovieCommand, name: 'movie' },
+        { setup: setupTranslateCommand, name: 'translate' }
+    ];
+
+    commands.forEach(({ setup, name }) => {
+        const limit = commandLimits[name] || commandLimits.default;
+        setup(bot, limit);
+    });
+}
+
+setupCommandsWithRateLimits();
 
 // Setup admin commands
 setupAdminCommands(bot);
@@ -240,20 +300,33 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Add to bot.js
 function cleanupResources() {
-    // Cleanup old sessions
     const hour = 60 * 60 * 1000;
-    userSessions.forEach((session, chatId) => {
-        if (Date.now() - session.timestamp > 24 * hour) {
-            userSessions.delete(chatId);
-        }
+    
+    // Cleanup sessions with different timeouts
+    const cleanupMap = new Map([
+        [userSessions, 24 * hour],
+        [translateModeUsers, 30 * 60 * 1000],
+        [imageGenerationSessions, 30 * 60 * 1000]
+    ]);
+
+    const now = Date.now();
+    cleanupMap.forEach((timeout, sessions) => {
+        sessions.forEach((session, chatId) => {
+            if (now - session.timestamp > timeout) {
+                sessions.delete(chatId);
+            }
+        });
     });
     
-    // Cleanup other resources
+    // Cleanup preferences
     userPreferences.forEach((pref, chatId) => {
         if (!activeChatIds.has(chatId)) {
             userPreferences.delete(chatId);
         }
     });
+
+    // Run rate limit service cleanup
+    rateLimitService.cleanup();
 }
 
 // Run cleanup every 6 hours
@@ -284,6 +357,25 @@ function setupBotConnection() {
 
 setupScheduler(bot);
 
-// Add this line with your other command setups
-setupMovieCommand(bot);
-setupTranslateCommand(bot);
+function setupGracefulShutdown(bot) {
+    const shutdown = async (signal) => {
+        console.log(`Received ${signal}. Cleaning up...`);
+        
+        // Cleanup all active sessions
+        cleanupResources();
+        
+        // Clear all intervals
+        clearInterval(cleanupInterval);
+        
+        // Stop bot polling
+        await bot.stopPolling();
+        
+        console.log('Cleanup complete. Shutting down...');
+        process.exit(0);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+setupGracefulShutdown(bot);
