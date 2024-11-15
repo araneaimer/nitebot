@@ -5,6 +5,7 @@ import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import { statSync } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -22,6 +23,16 @@ export function setupYoutubeCommand(bot) {
         const url = match[2].trim();
         let tempPath = null;
 
+        if (downloadingUsers.has(userId)) {
+            await bot.sendMessage(chatId, '⚠️ Please wait for your current download to complete.');
+            return;
+        }
+
+        if (!isValidYoutubeUrl(url)) {
+            await bot.sendMessage(chatId, '❌ Please provide a valid YouTube URL.');
+            return;
+        }
+
         try {
             downloadingUsers.add(userId);
             const statusMessage = await bot.sendMessage(chatId, '🔍 Fetching video information...');
@@ -31,17 +42,6 @@ export function setupYoutubeCommand(bot) {
             const videoInfo = JSON.parse(info);
             const videoTitle = videoInfo.title;
             tempPath = join(tmpdir(), `${Date.now()}-${userId}.mp4`);
-
-            // Initialize download status
-            await bot.editMessageText(
-                `📥 Downloading: ${videoTitle}\n\n` +
-                'Progress: [□□□□□□□□□□] 0%\n' +
-                'Quality: Best available (up to 1080p)',
-                {
-                    chat_id: chatId,
-                    message_id: statusMessage.message_id
-                }
-            );
 
             // Download command with progress tracking
             const downloadCmd = [
@@ -55,8 +55,6 @@ export function setupYoutubeCommand(bot) {
                 `"${url}"`
             ].join(' ');
 
-            console.log('Executing command:', downloadCmd);
-
             // Execute download and wait for completion
             await new Promise((resolve, reject) => {
                 const downloadProcess = exec(downloadCmd);
@@ -66,12 +64,11 @@ export function setupYoutubeCommand(bot) {
                     const progressMatch = data.match(/(\d+\.?\d*)%/);
                     if (progressMatch) {
                         const progress = parseFloat(progressMatch[1]);
-                        // Update progress message every 5% change
                         if (progress - lastProgress >= 5) {
                             lastProgress = progress;
                             try {
                                 await bot.editMessageText(
-                                    `📥 Downloading: ${videoTitle}\n\n` +
+                                    `📥 Downloading:\n ${videoTitle}\n\n` +
                                     `Progress: ${createProgressBar(progress)} ${progress.toFixed(1)}%\n` +
                                     'Quality: Best available (up to 1080p)',
                                     {
@@ -80,18 +77,20 @@ export function setupYoutubeCommand(bot) {
                                     }
                                 );
                             } catch (error) {
-                                console.error('Error updating progress:', error);
+                                // Ignore progress update errors
                             }
                         }
                     }
                 });
 
                 downloadProcess.stderr.on('data', (data) => {
-                    console.error('Download error:', data);
+                    if (data.includes('ERROR:')) {
+                        console.error('YouTube-DL Error:', data.trim());
+                    }
                 });
 
                 downloadProcess.on('error', (error) => {
-                    console.error('Process error:', error);
+                    console.error('Download Process Error:', error.message);
                     reject(error);
                 });
                 
@@ -104,14 +103,17 @@ export function setupYoutubeCommand(bot) {
                 });
             });
 
-            // Verify file exists and wait for it to be fully written
+            // Verify file exists and check size
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             if (!existsSync(tempPath)) {
                 throw new Error('Download failed: File not found');
             }
 
-            // Update status message for upload
+            // Get file size in MB
+            const fileSizeInMB = statSync(tempPath).size / (1024 * 1024);
+            const MAX_VIDEO_SIZE_MB = 50; // Telegram's video limit
+
             await bot.editMessageText(
                 '📤 Uploading to Telegram...',
                 {
@@ -120,21 +122,28 @@ export function setupYoutubeCommand(bot) {
                 }
             );
 
-            // Create a readable stream and send the file
             const fileStream = createReadStream(tempPath);
-            await bot.sendVideo(chatId, fileStream, {
-                caption: `🎥 ${videoTitle}`,
-                reply_to_message_id: msg.message_id,
-                filename: `${videoTitle}.mp4`
-            });
 
-            // Clean up
+            if (fileSizeInMB <= MAX_VIDEO_SIZE_MB) {
+                await bot.sendVideo(chatId, fileStream, {
+                    caption: `🎥 ${videoTitle}`,
+                    reply_to_message_id: msg.message_id,
+                    filename: `${videoTitle}.mp4`
+                });
+            } else {
+                await bot.sendDocument(chatId, fileStream, {
+                    caption: `📁 ${videoTitle}\n\nFile size: ${fileSizeInMB.toFixed(1)} MB`,
+                    reply_to_message_id: msg.message_id,
+                    filename: `${videoTitle}.mp4`
+                });
+            }
+
             fileStream.destroy();
             await unlink(tempPath);
             await bot.deleteMessage(chatId, statusMessage.message_id);
 
         } catch (error) {
-            console.error('YouTube download error:', error);
+            console.error('YouTube download error:', error.message);
             let errorMessage = '❌ Failed to download video. Please try again.';
             
             if (error.message.includes('too large')) {
@@ -154,7 +163,7 @@ export function setupYoutubeCommand(bot) {
                 try {
                     await unlink(tempPath);
                 } catch (cleanupError) {
-                    console.error('Error cleaning up temp file:', cleanupError);
+                    console.error('Cleanup error:', cleanupError.message);
                 }
             }
         }
