@@ -114,17 +114,6 @@ I am a versatile personal assistant bot currently under development.`;
             examples: ['/translate', '/trns'],
             category: 'Utilities',
             note: '\nSupports multiple languages with auto-detection capability.'
-        },
-        {
-            command: '/yt, /ytdl',
-            description: 'Download YouTube videos in high quality',
-            usage: '/yt [YouTube URL]',
-            examples: [
-                '/yt https://youtube.com/watch?v=...',
-                '/ytdl https://youtu.be/...'
-            ],
-            category: 'Media',
-            note: 'Video size limit: 50MB (Telegram limit)'
         }
     ];
 
