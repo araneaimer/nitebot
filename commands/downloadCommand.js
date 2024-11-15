@@ -11,9 +11,9 @@ const execAsync = promisify(exec);
 
 // Supported quality options for video downloads
 const QUALITY_OPTIONS = {
-    'best': '🎯 Best (1080p)',
-    'medium': '📊 Medium (480p)',
-    'low': '📱 Low (360p)'
+    'best': 'Best Quality (1080p)',
+    'medium': 'Medium Quality (480p)',
+    'low': 'Low Quality (360p)'
 };
 
 // Size limit for Telegram uploads (50MB in bytes)
@@ -94,7 +94,7 @@ _Note: Please wait for each download to complete before starting another._`;
                         callback_data: `dl:${quality}:${urlHash}`
                     }]),
                     [{
-                        text: '❌ Cancel',
+                        text: 'Cancel',
                         callback_data: `dl:cancel:${urlHash}`
                     }]
                 ]
