@@ -1,23 +1,38 @@
 async function fetchQuote() {
-    try {
-        const response = await fetch('https://api.quotable.io/random?tags=inspirational|motivation|wisdom');
-        const data = await response.json();
-        
-        if (!data.content || !data.author) {
-            throw new Error('Invalid quote data received');
+    // List of quote API endpoints in order of preference
+    const APIs = [
+        {
+            url: 'https://api.quotable.io/quotes/random',
+            transform: (data) => ({
+                text: data[0].content,
+                author: data[0].author
+            })
+        },
+        {
+            url: 'https://zenquotes.io/api/random',
+            transform: (data) => ({
+                text: data[0].q,
+                author: data[0].a
+            })
         }
-        
-        return {
-            text: data.content,
-            author: data.author
-        };
-    } catch (error) {
-        console.error('Error fetching quote:', error);
-        return {
-            text: 'The only way to do great work is to love what you do.',
-            author: 'Steve Jobs'
-        };
+    ];
+
+    // Try each API in sequence until one works
+    for (const api of APIs) {
+        try {
+            const response = await fetch(api.url);
+            if (!response.ok) continue;
+            
+            const data = await response.json();
+            return api.transform(data);
+        } catch (error) {
+            console.error(`Error with ${api.url}:`, error);
+            continue; // Try next API
+        }
     }
+
+    // If all APIs fail, throw an error
+    throw new Error('Unable to fetch quotes from any available source');
 }
 
 export function setupQuoteCommand(bot) {
@@ -28,47 +43,14 @@ export function setupQuoteCommand(bot) {
             await bot.sendChatAction(chatId, 'typing');
             
             const quote = await fetchQuote();
-            const formattedQuote = `${quote.text}\n— ${quote.author}`;
+            const formattedQuote = `*${quote.text}*\n— *${quote.author}*`;
             
             await bot.sendMessage(chatId, formattedQuote, {
-                reply_markup: {
-                    inline_keyboard: [[
-                        { text: '🔄 Another Quote', callback_data: 'quote_another' }
-                    ]]
-                }
+                parse_mode: 'Markdown'
             });
         } catch (error) {
             console.error('Error in quote command:', error);
-            await bot.sendMessage(chatId, '❌ Failed to fetch a quote. Please try again.');
-        }
-    });
-
-    // Handle callback query for "Another Quote" button
-    bot.on('callback_query', async (query) => {
-        if (query.data === 'quote_another') {
-            const chatId = query.message.chat.id;
-            const messageId = query.message.message_id;
-
-            try {
-                const quote = await fetchQuote();
-                const formattedQuote = `${quote.text}\n— ${quote.author}`;
-
-                await bot.editMessageText(formattedQuote, {
-                    chat_id: chatId,
-                    message_id: messageId,
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: '🔄 Another Quote', callback_data: 'quote_another' }
-                        ]]
-                    }
-                });
-            } catch (error) {
-                console.error('Error in quote callback:', error);
-                await bot.answerCallbackQuery(query.id, {
-                    text: '❌ Failed to fetch a new quote. Please try again.',
-                    show_alert: true
-                });
-            }
+            await bot.sendMessage(chatId, '😔 Having trouble fetching quotes at the moment. Please try again later.');
         }
     });
 } 
