@@ -125,6 +125,14 @@ I am a versatile personal assistant bot currently under development.`;
             ],
             category: 'Support',
             note: '\nBug reports are reviewed by administrators. Please provide clear and detailed descriptions to help improve the bot.'
+        },
+        {
+            command: '/quote, /qt',
+            description: 'Get random motivational quotes with authors and tags',
+            usage: '/quote',
+            examples: ['/quote', '/qt'],
+            category: 'Entertainment',
+            note: '\nClick "Another Quote" to get a new quote without using the command again.'
         }
     ];
 

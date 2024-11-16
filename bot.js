@@ -25,6 +25,7 @@ import { validateEnvironment } from './config/validateEnv.js';
 import { rateLimitService } from './services/rateLimitService.js';
 import { setupDownloadCommand } from './commands/downloadCommand.js';
 import { setupBugCommand } from './commands/bugCommand.js';
+import { setupQuoteCommand } from './commands/quoteCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -260,6 +261,7 @@ function setupCommandsWithRateLimits() {
         { setup: setupSubscribeCommand, name: 'subscribe' },
         { setup: setupMovieCommand, name: 'movie' },
         { setup: setupTranslateCommand, name: 'translate' },
+        { setup: setupQuoteCommand, name: 'quote' },
     ];
 
     commands.forEach(({ setup, name }) => {
