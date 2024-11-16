@@ -26,6 +26,7 @@ import { rateLimitService } from './services/rateLimitService.js';
 import { setupDownloadCommand } from './commands/downloadCommand.js';
 import { setupBugCommand } from './commands/bugCommand.js';
 import { setupQuoteCommand } from './commands/quoteCommand.js';
+import { setupTicTacToeCommand } from './commands/tictactoeCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -262,6 +263,7 @@ function setupCommandsWithRateLimits() {
         { setup: setupMovieCommand, name: 'movie' },
         { setup: setupTranslateCommand, name: 'translate' },
         { setup: setupQuoteCommand, name: 'quote' },
+        { setup: setupTicTacToeCommand, name: 'tictactoe' },
     ];
 
     commands.forEach(({ setup, name }) => {

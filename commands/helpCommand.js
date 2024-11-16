@@ -133,6 +133,16 @@ I am a versatile personal assistant bot currently under development.`;
             examples: ['/quote', '/qt'],
             category: 'Entertainment',
             note: '\nClick "Another Quote" to get a new quote without using the command again.'
+        },
+        {
+            command: '/tictactoe, /ttt',
+            description: 'Play Tic Tac Toe game',
+            usage: '/tictactoe or /ttt',
+            examples: [
+                '/tictactoe',
+                '/ttt'
+            ],
+            category: 'Games'
         }
     ];
 
