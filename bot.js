@@ -36,7 +36,8 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     polling: true,
     request: {
         parseUrl: URLParse
-    }
+    },
+    filepath: false
 });
 
 // Add message handler before command setup
@@ -292,11 +293,11 @@ function detectMemeIntent(text) {
 }
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    console.error('Error:', error.message);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (error) => {
+    console.error('Error:', error.message);
 });
 
 // Add to bot.js
@@ -380,5 +381,4 @@ function setupGracefulShutdown(bot) {
 }
 
 setupGracefulShutdown(bot);
-
 setupDownloadCommand(bot);

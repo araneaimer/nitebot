@@ -264,8 +264,10 @@ _Note: Please wait for each download to complete before starting another._`;
             await unlink(tempPath);
 
         } catch (error) {
-            console.error('Download error:', error.message);
-            await bot.sendMessage(chatId, '❌ Download failed. Please try again or try a different quality.');
+            const errorMessage = error.code === 'ETELEGRAM' && error.response.statusCode === 429
+                ? '⚠️ Too many requests. Please try again in a few seconds.'
+                : '❌ Download failed. Please try again or try a different quality.';
+            await bot.sendMessage(chatId, errorMessage);
         } finally {
             downloadingUsers.delete(userId);
             // Clean up the URL cache
