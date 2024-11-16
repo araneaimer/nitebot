@@ -2,17 +2,17 @@ async function fetchQuote() {
     // List of quote API endpoints in order of preference
     const APIs = [
         {
-            url: 'https://api.quotable.io/quotes/random',
-            transform: (data) => ({
-                text: data[0].content,
-                author: data[0].author
-            })
-        },
-        {
             url: 'https://zenquotes.io/api/random',
             transform: (data) => ({
                 text: data[0].q,
                 author: data[0].a
+            })
+        },
+        {
+            url: 'https://api.quotable.io/random',
+            transform: (data) => ({
+                text: data.content,
+                author: data.author
             })
         }
     ];
