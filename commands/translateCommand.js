@@ -172,29 +172,23 @@ Examples: Korean, Arabic, Portuguese, Vietnamese, etc.`,
         if (!targetLangInput && !text) {
             await bot.sendMessage(
                 chatId,
-                `*Nite Live Translate*
-
-Direct Translation:
-/trans en Hello World, /trns English Bonjour le monde, /translate german こんにちは
-
-Quick Translation:
-/trans Hello World
-Shows a list of popular languages to choose from.
-
-Source language is automatically detected`,
+                `*Nite Live Translate*\n\n...`,
                 { parse_mode: 'Markdown' }
             );
             return;
         }
 
-        // If we have text but no language, show language selection menu
-        if (!targetLangInput && text) {
+        // Add this check to validate if the targetLangInput is a valid language code
+        const isValidLanguageCode = Object.keys(SUPPORTED_LANGUAGES).includes(targetLangInput);
+
+        // If we have text but no valid language code, show language selection menu
+        if ((!targetLangInput || !isValidLanguageCode) && text) {
             await showLanguageSelectionMenu(chatId, text);
             return;
         }
 
-        // Direct translation with language parameter
-        if (targetLangInput && text) {
+        // Direct translation with valid language parameter
+        if (isValidLanguageCode && text) {
             try {
                 const result = await translateWithFallback(text, targetLangInput);
                 await bot.sendMessage(
