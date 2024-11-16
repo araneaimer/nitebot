@@ -114,6 +114,17 @@ I am a versatile personal assistant bot currently under development.`;
             examples: ['/translate', '/trns'],
             category: 'Utilities',
             note: '\nSupports multiple languages with auto-detection capability.'
+        },
+        {
+            command: '/bug',
+            description: 'Report a bug or issue with the bot',
+            usage: '/bug <description>',
+            examples: [
+                '/bug The /time command shows incorrect timezone',
+                '/bug Currency conversion not working for EUR to USD'
+            ],
+            category: 'Support',
+            note: '\nBug reports are reviewed by administrators. Please provide clear and detailed descriptions to help improve the bot.'
         }
     ];
 
