@@ -133,5 +133,5 @@ start-bot.vbs
 nodemon.json
 
 data/subscriptions.json
-
+data/bugs.json
 temp/*
