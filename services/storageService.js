@@ -6,45 +6,87 @@ import { EventEmitter } from 'events';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STORAGE_PATH = path.join(__dirname, '../data/subscriptions.json');
-
-// Ensure data directory exists
-const dataDir = path.join(__dirname, '../data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Single instance of subscriptions Map
+const subscriptionEmitter = new EventEmitter();
 let subscriptionsMap = new Map();
 
-// Initialize storage
-function initializeStorage() {
-    try {
+class StorageService {
+    constructor() {
+        this.dataPath = path.join(process.cwd(), 'data');
+        this.bugsFile = path.join(this.dataPath, 'bugs.json');
+        this.initializeStorage();
+    }
+
+    initializeStorage() {
+        // Create data directory if it doesn't exist
+        if (!fs.existsSync(this.dataPath)) {
+            fs.mkdirSync(this.dataPath, { recursive: true });
+        }
+
+        // Initialize bugs file
+        if (!fs.existsSync(this.bugsFile)) {
+            fs.writeFileSync(this.bugsFile, JSON.stringify([]));
+        }
+
+        // Initialize subscriptions
         if (!fs.existsSync(STORAGE_PATH)) {
             fs.writeFileSync(STORAGE_PATH, JSON.stringify({}), 'utf8');
         } else {
-            const data = fs.readFileSync(STORAGE_PATH, 'utf8');
-            if (data.trim()) {
-                const parsedData = JSON.parse(data);
-                subscriptionsMap = new Map(Object.entries(parsedData));
-            }
+            this.loadSubscriptions();
         }
-    } catch (error) {
-        console.error('Error initializing storage:', error);
-        fs.writeFileSync(STORAGE_PATH, JSON.stringify({}), 'utf8');
     }
-}
 
-// Initialize storage on module load
-initializeStorage();
+    // Bug reports methods
+    getBugReports() {
+        try {
+            const data = fs.readFileSync(this.bugsFile, 'utf8');
+            return JSON.parse(data);
+        } catch (error) {
+            console.error('Error reading bug reports:', error);
+            return [];
+        }
+    }
 
-const subscriptionEmitter = new EventEmitter();
+    addBugReport(report) {
+        try {
+            const bugs = this.getBugReports();
+            bugs.push({
+                ...report,
+                id: Date.now(),
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            });
+            fs.writeFileSync(this.bugsFile, JSON.stringify(bugs, null, 2));
+            return true;
+        } catch (error) {
+            console.error('Error saving bug report:', error);
+            return false;
+        }
+    }
 
-export const storageService = {
+    updateBugStatus(bugId, status) {
+        try {
+            const bugs = this.getBugReports();
+            const bugIndex = bugs.findIndex(bug => bug.id === bugId);
+            if (bugIndex !== -1) {
+                bugs[bugIndex].status = status;
+                bugs[bugIndex].updatedAt = new Date().toISOString();
+                fs.writeFileSync(this.bugsFile, JSON.stringify(bugs, null, 2));
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error updating bug status:', error);
+            return false;
+        }
+    }
+
+    // Subscription methods
     loadSubscriptions() {
         try {
             const data = fs.readFileSync(STORAGE_PATH, 'utf8');
             if (!data.trim()) {
-                return new Map();
+                subscriptionsMap = new Map();
+                return subscriptionsMap;
             }
             const parsedData = JSON.parse(data);
             subscriptionsMap = new Map(Object.entries(parsedData));
@@ -53,7 +95,7 @@ export const storageService = {
             console.error('Error loading subscriptions:', error);
             return new Map();
         }
-    },
+    }
 
     saveSubscriptions(subscriptions) {
         try {
@@ -63,13 +105,13 @@ export const storageService = {
         } catch (error) {
             console.error('Error saving subscriptions:', error);
         }
-    },
+    }
 
     updateSubscription(chatId, subscriptionData) {
         subscriptionsMap.set(chatId.toString(), subscriptionData);
         this.saveSubscriptions(subscriptionsMap);
         subscriptionEmitter.emit('subscriptionChange', chatId, subscriptionData);
-    },
+    }
 
     removeSubscription(chatId) {
         if (subscriptionsMap.has(chatId.toString())) {
@@ -77,13 +119,15 @@ export const storageService = {
             this.saveSubscriptions(subscriptionsMap);
             subscriptionEmitter.emit('subscriptionChange', chatId, null);
         }
-    },
+    }
 
     getSubscriptions() {
         return subscriptionsMap;
-    },
+    }
 
     onSubscriptionChange(callback) {
         subscriptionEmitter.on('subscriptionChange', callback);
     }
-}; 
+}
+
+export const storageService = new StorageService(); 

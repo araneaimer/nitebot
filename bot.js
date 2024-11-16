@@ -24,6 +24,7 @@ import { setupTranslateCommand } from './commands/translateCommand.js';
 import { validateEnvironment } from './config/validateEnv.js';
 import { rateLimitService } from './services/rateLimitService.js';
 import { setupDownloadCommand } from './commands/downloadCommand.js';
+import { setupBugCommand } from './commands/bugCommand.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -382,3 +383,4 @@ function setupGracefulShutdown(bot) {
 
 setupGracefulShutdown(bot);
 setupDownloadCommand(bot);
+setupBugCommand(bot);

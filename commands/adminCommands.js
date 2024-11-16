@@ -1,3 +1,5 @@
+import { storageService } from '../services/storageService.js';
+
 let maintenanceMode = false;
 let maintenanceStartTime = null;
 const userSet = new Set();
@@ -47,6 +49,12 @@ const adminCommands = [
         description: 'Shows command usage statistics and recent activity',
         usage: 'Just type /overview',
         example: '/overview'
+    },
+    {
+        command: '/reports (or /rprts)',
+        description: 'Manage bug reports from users',
+        usage: '/reports [pending|resolved|all] or /rprts [pending|resolved|all]',
+        example: '/reports pending\n/rprts resolved\n/reports all'
     }
 ];
 
@@ -381,6 +389,72 @@ export const setupAdminCommands = (bot) => {
                 await bot.answerCallbackQuery(query.id); // Still silent
             }
         }
+
+        // Add this inside the existing callback query handler where other conditions are checked
+        if (query.data.startsWith('reports_')) {
+            const action = query.data.replace('reports_', '');
+            const bugId = query.data.split('_')[2];
+            const bugs = storageService.getBugReports();
+            
+            let filteredBugs;
+            let type;
+            
+            switch (action) {
+                case 'pending':
+                    filteredBugs = bugs.filter(bug => bug.status === 'pending');
+                    type = 'Pending';
+                    break;
+                case 'resolved':
+                    filteredBugs = bugs.filter(bug => bug.status === 'resolved');
+                    type = 'Resolved';
+                    break;
+                case 'all':
+                    filteredBugs = bugs;
+                    type = 'All';
+                    break;
+                case 'resolve':
+                    if (bugId && storageService.updateBugStatus(parseInt(bugId), 'resolved')) {
+                        await bot.answerCallbackQuery(query.id, {
+                            text: "✅ Bug marked as resolved",
+                            show_alert: true
+                        });
+                        filteredBugs = storageService.getBugReports();
+                        type = 'All';
+                    }
+                    break;
+            }
+            
+            if (filteredBugs) {
+                try {
+                    await bot.editMessageText(
+                        formatBugsList(filteredBugs, type),
+                        {
+                            chat_id: query.message.chat.id,
+                            message_id: query.message.message_id,
+                            parse_mode: 'Markdown',
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [
+                                        { text: 'Pending', callback_data: 'reports_pending' },
+                                        { text: 'Resolved', callback_data: 'reports_resolved' },
+                                        { text: 'All', callback_data: 'reports_all' }
+                                    ]
+                                ]
+                            }
+                        }
+                    );
+                } catch (error) {
+                    console.error('Error updating bugs list:', error);
+                    await bot.answerCallbackQuery(query.id, {
+                        text: "❌ Error updating bugs list",
+                        show_alert: true
+                    });
+                }
+            }
+            
+            await bot.answerCallbackQuery(query.id);
+            return;
+        }
     });
 
     bot.onText(/\/ping/, async (msg) => {
@@ -625,6 +699,80 @@ export const setupAdminCommands = (bot) => {
             await bot.sendMessage(msg.chat.id, "❌ Error generating overview.");
         }
     });
+
+    bot.onText(/\/(reports|rprts)(?:\s+(\w+))?/, async (msg, match) => {
+        if (await handleNonAdmin(bot, msg)) return;
+
+        const action = match[2]?.toLowerCase(); // Note: match[2] because match[1] now contains the command name
+        const bugs = storageService.getBugReports();
+
+        if (action === 'pending') {
+            const pendingBugs = bugs.filter(bug => bug.status === 'pending');
+            await sendBugsList(bot, msg.chat.id, pendingBugs, 'Pending');
+        } else if (action === 'resolved') {
+            const resolvedBugs = bugs.filter(bug => bug.status === 'resolved');
+            await sendBugsList(bot, msg.chat.id, resolvedBugs, 'Resolved');
+        } else {
+            await sendBugsList(bot, msg.chat.id, bugs, 'All');
+        }
+    });
+
+    // Helper function to send bugs list
+    async function sendBugsList(bot, chatId, bugs, type) {
+        if (bugs.length === 0) {
+            await bot.sendMessage(
+                chatId,
+                `No ${type.toLowerCase()} bug reports found.`,
+                { parse_mode: 'Markdown' }
+            );
+            return;
+        }
+
+        const message = bugs.map(bug => (
+            `🐛 *Bug Report #${bug.id}*\n` +
+            `Status: ${bug.status === 'pending' ? '⏳' : '✅'} ${bug.status}\n` +
+            `From: ${bug.userFirstName} (@${bug.username})\n` +
+            `Description: ${bug.description}\n` +
+            `Reported: ${new Date(bug.createdAt).toLocaleString()}\n` +
+            `${bug.updatedAt ? `Updated: ${new Date(bug.updatedAt).toLocaleString()}\n` : ''}` +
+            `-------------------`
+        )).join('\n\n');
+
+        await bot.sendMessage(chatId, 
+            `📊 *${type} Bug Reports*\n\n${message}`,
+            { 
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[
+                        { text: 'Pending', callback_data: 'reports_pending' },
+                        { text: 'Resolved', callback_data: 'reports_resolved' },
+                        { text: 'All', callback_data: 'reports_all' }
+                    ]]
+                }
+            }
+        );
+    }
+
+    // Helper function to format bugs list
+    function formatBugsList(bugs, type) {
+        if (bugs.length === 0) {
+            return `📊 *${type} Bug Reports*\n\nNo bug reports found.`;
+        }
+
+        const header = `📊 *${type} Bug Reports*\n\n`;
+        const bugsList = bugs.map(bug => (
+            `🐛 *Bug #${bug.id}*\n` +
+            `Status: ${bug.status === 'pending' ? '⏳' : '✅'} ${bug.status}\n` +
+            `From: ${bug.userFirstName} (@${bug.username})\n` +
+            `Description: ${bug.description}\n` +
+            `Reported: ${new Date(bug.createdAt).toLocaleString()}\n` +
+            `${bug.updatedAt ? `Updated: ${new Date(bug.updatedAt).toLocaleString()}\n` : ''}` +
+            (bug.status === 'pending' ? `[Resolve](https://t.me/${bot.options.username}?start=resolve_${bug.id})\n` : '') +
+            `-------------------`
+        )).join('\n\n');
+
+        return header + bugsList;
+    }
 };
 
 // Helper function to generate help message for a specific page
