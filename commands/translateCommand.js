@@ -199,7 +199,7 @@ Source language is automatically detected`,
                 const result = await translateWithFallback(text, targetLangInput);
                 await bot.sendMessage(
                     chatId,
-                    `*Original*: ${text}\n\n*Translation*: ${result.translated}`,
+                    `*Original*: ${text}\n\n*Translation*: \`${result.translated}\``,
                     {
                         parse_mode: 'Markdown',
                         reply_markup: getTranslateAnotherKeyboard()
@@ -222,7 +222,7 @@ Source language is automatically detected`,
                 const result = await translateWithFallback(session.text, msg.text.toLowerCase());
                 await bot.sendMessage(
                     chatId,
-                    `*Original*: ${session.text}\n\n*Translation*: ${result.translated}`,
+                    `*Original*: ${session.text}\n\n*Translation*: \`${result.translated}\``,
                     {
                         parse_mode: 'Markdown',
                         reply_markup: getTranslateAnotherKeyboard()
@@ -290,7 +290,7 @@ Source language is automatically detected`,
 
             await bot.editMessageText(
                 `🔤 *Original* (${sourceLangName}):\n${session.text}\n\n` +
-                `🌐 *Translation* (${targetLangName}):\n${result.translated}`,
+                `🌐 *Translation* (${targetLangName}):\n\`${result.translated}\``,
                 {
                     chat_id: chatId,
                     message_id: query.message.message_id,
