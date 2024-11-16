@@ -25,6 +25,25 @@ const SUPPORTED_LANGUAGES = {
     'hi': 'Hindi'
 };
 
+// Add this helper function at the top level
+const normalizeLanguageCode = (input) => {
+    if (!input) return null;
+    
+    // Convert to lowercase for consistency
+    input = input.toLowerCase().trim();
+    
+    // Direct match with language code
+    if (SUPPORTED_LANGUAGES[input]) {
+        return input;
+    }
+    
+    // Match full language name to code
+    const languageEntry = Object.entries(SUPPORTED_LANGUAGES)
+        .find(([_, name]) => name.toLowerCase() === input);
+    
+    return languageEntry ? languageEntry[0] : null;
+};
+
 async function translateWithFallback(text, targetLang, sourceLang = 'auto') {
     let lastError;
     
@@ -163,9 +182,9 @@ Examples: Korean, Arabic, Portuguese, Vietnamese, etc.`,
     };
 
     // Handle /translate or /trns command
-    bot.onText(/\/(translate|trns|trans)(?:\s+([a-zA-Z]+)\s+)?(.+)?/, async (msg, match) => {
+    bot.onText(/\/(translate|trns|trans)(?:\s+([^]+?)\s+)?(.+)?/, async (msg, match) => {
         const chatId = msg.chat.id;
-        const targetLangInput = match[2]?.trim().toLowerCase();
+        const targetLangInput = match[2]?.trim();
         const text = match[3]?.trim();
 
         // Help message if no parameters
@@ -178,19 +197,19 @@ Examples: Korean, Arabic, Portuguese, Vietnamese, etc.`,
             return;
         }
 
-        // Add this check to validate if the targetLangInput is a valid language code
-        const isValidLanguageCode = Object.keys(SUPPORTED_LANGUAGES).includes(targetLangInput);
+        // Normalize the language input
+        const normalizedLangCode = normalizeLanguageCode(targetLangInput);
 
         // If we have text but no valid language code, show language selection menu
-        if ((!targetLangInput || !isValidLanguageCode) && text) {
+        if ((!targetLangInput || !normalizedLangCode) && text) {
             await showLanguageSelectionMenu(chatId, text);
             return;
         }
 
         // Direct translation with valid language parameter
-        if (isValidLanguageCode && text) {
+        if (normalizedLangCode && text) {
             try {
-                const result = await translateWithFallback(text, targetLangInput);
+                const result = await translateWithFallback(text, normalizedLangCode);
                 await bot.sendMessage(
                     chatId,
                     `*Original*: ${text}\n\n*Translation*: \`${result.translated}\``,
